@@ -59,6 +59,64 @@ public class AuditEventService {
         return objectMapper.writeValueAsString(content);
     }
 
+    
+    private Map<String, Object> normalizePayload(Map<String, Object> payload)
+                throws JacksonException {
+        String payloadJson = objectMapper.writeValueAsString(payload);
+
+        return objectMapper.readValue(
+                payloadJson,
+                objectMapper.getTypeFactory()
+                        .constructMapType(
+                                TreeMap.class,
+                                String.class,
+                                Object.class
+                        )
+        );
+     }
+
+
+    
+     private String calculateStoredEventHash(AuditEventEntity event) {
+        try {
+                Map<String, Object> payload = objectMapper.readValue(
+                        event.getPayload(),
+                        objectMapper.getTypeFactory()
+                                .constructMapType(
+                                        TreeMap.class,
+                                        String.class,
+                                        Object.class
+                                )
+                );
+
+                String hashInput = createHashInput(
+                        event.getId(),
+                        event.getEventType(),
+                        event.getActorId(),
+                        event.getResourceType(),
+                        event.getResourceId(),
+                        normalizePayload(payload),
+                        event.getTimestamp(),
+                        event.getPreviousHash()
+                );
+
+               String calculatedHash = hashService.sha256(hashInput);
+
+               System.out.println(
+                "Verifying sequence " + event.getSequenceNumber()
+                + " | stored hash: " + event.getHash()
+                + " | calculated hash: " + calculatedHash);
+
+               return calculatedHash;
+
+        
+        } catch (JacksonException e) {
+                throw new IllegalStateException(
+                        "Failed to deserialize stored audit payload", e);
+        }
+    }
+
+
     public AuditEventEntity createEvent(AuditEventRequest request) {
         UUID id = UUID.randomUUID();
         // Instant timestamp = Instant.now();
@@ -75,7 +133,7 @@ public class AuditEventService {
         
     try {
         String payloadJson =
-                objectMapper.writeValueAsString(request.getPayload());
+                objectMapper.writeValueAsString(normalizePayload(request.getPayload()));
 
         // JsonNode canonicalPayload = objectMapper.readTree(payloadJson);
 
@@ -85,7 +143,7 @@ public class AuditEventService {
                 request.getActorId(),
                 request.getResourceType(),
                 request.getResourceId(),
-                request.getPayload(),
+                normalizePayload(request.getPayload()),
                 timestamp,
                 previousHash
         );
@@ -160,6 +218,7 @@ public class AuditEventService {
         String expectedPreviousHash = GENESIS_HASH;
 
         for (AuditEventEntity event : events) {
+                System.out.println( "Checking sequence: " + event.getSequenceNumber());
 
                 // Check whether this event links to the previous event.
                 if (!expectedPreviousHash.equals(event.getPreviousHash())) {
@@ -171,8 +230,34 @@ public class AuditEventService {
                 );
                 }
 
+                
+                String calculatedHash = calculateStoredEventHash(event);
+
+                if (!calculatedHash.equals(event.getHash())) {
+                return new AuditVerificationResponse(
+                        false,
+                        event.getSequenceNumber(),
+                        "CONTENT_HASH_MISMATCH",
+                        "Event content does not match its stored hash"
+                );
+                }
+
+                // if (!calculatedHash.equals(event.getHash())) {
+                //         System.out.println(
+                //                 "CONTENT HASH MISMATCH at sequence "
+                //                 + event.getSequenceNumber()
+                //         );
+                // } else {
+                // System.out.println(
+                //         "CONTENT HASH OK at sequence "
+                //         + event.getSequenceNumber()
+                // );
+                // }
+
                 // Move forward using this event's stored hash.
                 expectedPreviousHash = event.getHash();
+
+                
         }
 
         return new AuditVerificationResponse(
