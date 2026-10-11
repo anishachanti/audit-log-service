@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.Instant;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/audit/events")
@@ -45,6 +46,21 @@ public class AuditEventController {
         return auditEventService.queryEvents(
                 actorId, resourceType, resourceId,
                 eventType, from, to, page, size);
+    }
+
+    @PatchMapping("/{sequenceNumber}/archive")
+    public AuditEventEntity archiveEvent(@PathVariable Long sequenceNumber) {
+        return auditEventService.archiveEvent(sequenceNumber);
+    }
+
+    @PostMapping("/retention/archive-expired")
+    public Map<String, Object> archiveExpiredEvents() {
+        int archivedCount = auditEventService.archiveExpiredEvents();
+
+        return Map.of(
+                "archivedCount", archivedCount,
+                "message", "Expired audit events archived successfully"
+        );
     }
 
 }

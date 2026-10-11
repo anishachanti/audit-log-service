@@ -3,19 +3,19 @@ package com.anish.auditlogservice;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-// import tools.jackson.databind.JsonNode;
-import java.time.temporal.ChronoUnit;
+
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class AuditEventService {
@@ -25,6 +25,9 @@ public class AuditEventService {
     private final AuditEventRepository repository;
     private final HashService hashService;
     private final ObjectMapper objectMapper;
+
+    @Value("${audit.retention.days:365}")
+    private int retentionDays;
 
     public AuditEventService(
             AuditEventRepository repository,
@@ -169,6 +172,50 @@ public class AuditEventService {
     }
 
     }
+
+    public AuditEventEntity archiveEvent(Long sequenceNumber) {
+        AuditEventEntity event = repository.findById(sequenceNumber)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Audit event not found: " + sequenceNumber
+                ));
+
+        if (!event.isArchived()) {
+                event.setArchived(true);
+                event.setArchivedAt(Instant.now());
+                return repository.save(event);
+        }
+        return event;
+    }
+
+
+    public int archiveExpiredEvents() {
+        if (retentionDays < 1) {
+            throw new IllegalArgumentException(
+                    "Retention days must be at least 1"
+            ); 
+        }
+
+        Instant cutoff = Instant.now()
+            .minus(retentionDays, ChronoUnit.DAYS);
+
+        var events = repository.findAllByOrderBySequenceNumberAsc();
+
+        int archivedCount = 0;
+
+        for (AuditEventEntity event : events) {
+            if (!event.isArchived() && event.getTimestamp().isBefore(cutoff)) {
+                event.setArchived(true);
+                event.setArchivedAt(Instant.now());
+                archivedCount++;
+            }
+        }
+
+        repository.saveAll(events);
+
+        return archivedCount;
+    }
+
+
     public Page<AuditEventEntity> queryEvents(
             String actorId,
             String resourceType,
@@ -242,19 +289,6 @@ public class AuditEventService {
                 );
                 }
 
-                // if (!calculatedHash.equals(event.getHash())) {
-                //         System.out.println(
-                //                 "CONTENT HASH MISMATCH at sequence "
-                //                 + event.getSequenceNumber()
-                //         );
-                // } else {
-                // System.out.println(
-                //         "CONTENT HASH OK at sequence "
-                //         + event.getSequenceNumber()
-                // );
-                // }
-
-                // Move forward using this event's stored hash.
                 expectedPreviousHash = event.getHash();
 
                 

@@ -7,6 +7,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -91,5 +93,59 @@ void shouldQueryEventsByActorId() {
             results.getContent().get(0).getActorId()
     );
 }
+
+
+@Test
+void shouldDetectTamperedEvent() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("tamper-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("account-tamper-test");
+    request.setPayload(Map.of("action", "view"));
+
+    AuditEventEntity event = auditEventService.createEvent(request);
+
+    // Simulate someone modifying the database directly.
+    event.setActorId("unauthorized-user");
+    auditEventRepository.saveAndFlush(event);
+
+    AuditVerificationResponse response =
+            auditEventService.verifyChain();
+
+    assertFalse(response.isIntact());
+    assertEquals("CONTENT_HASH_MISMATCH", response.getViolationType());
+    assertEquals(
+            event.getSequenceNumber(),
+            response.getFirstInvalidSequenceNumber()
+    );
+}
+
+@Test
+void shouldArchiveExpiredEvents() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("retention-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("retention-test-account");
+    request.setPayload(Map.of("action", "view"));
+
+    AuditEventEntity event = auditEventService.createEvent(request);
+
+    event.setTimestamp(Instant.now().minus(400, ChronoUnit.DAYS));
+    auditEventRepository.saveAndFlush(event);
+
+    int archivedCount = auditEventService.archiveExpiredEvents();
+
+    assertEquals(1, archivedCount);
+
+    AuditEventEntity archivedEvent =
+            auditEventRepository.findById(event.getSequenceNumber())
+                    .orElseThrow();
+
+    assertTrue(archivedEvent.isArchived());
+    assertNotNull(archivedEvent.getArchivedAt());
+}
+
 
 }

@@ -48,6 +48,11 @@ public class AuditEventEntity {
     @Column(nullable = false)
     private String hash;
 
+    @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean archived = false;
+
+    private Instant archivedAt;
+
     public AuditEventEntity() {
     }
 
@@ -129,5 +134,21 @@ public class AuditEventEntity {
 
     public void setSequenceNumber(Long sequenceNumber) {
         this.sequenceNumber = sequenceNumber;
+    }
+
+    public boolean isArchived() {
+        return archived;
+    }
+
+    public void setArchived(boolean archived) {
+        this.archived = archived;
+    }
+
+    public Instant getArchivedAt() {
+        return archivedAt;
+    }
+
+    public void setArchivedAt(Instant archivedAt) {
+        this.archivedAt = archivedAt;
     }
 }
