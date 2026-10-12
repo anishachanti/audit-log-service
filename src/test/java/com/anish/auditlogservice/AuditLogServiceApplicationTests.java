@@ -484,6 +484,40 @@ void shouldRedactSelectedPayloadFieldsAndPreserveHashChain() throws Exception {
 }
 
 
+@Test
+void shouldReportRedactionLimitationDuringChainVerification() throws Exception {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("redaction-verification-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("redaction-verification-account");
+    request.setPayload(Map.of(
+            "accountNumber", "123456789",
+            "action", "VIEW"
+    ));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    auditEventService.redactPayload(
+            created.getSequenceNumber(),
+            java.util.List.of("accountNumber")
+    );
+
+    AuditVerificationResponse response = auditEventService.verifyChain();
+
+    assertTrue(response.isIntact(), response.getMessage());
+    assertNull(response.getFirstInvalidSequenceNumber());
+    assertNull(response.getViolationType());
+    assertTrue(
+            response.getMessage().contains("redacted payloads"),
+            response.getMessage()
+    );
+    assertTrue(
+            response.getMessage().contains("original payload hashes"),
+            response.getMessage()
+    );
+}
+
 
 @Test
 void shouldRejectUnknownRedactionField() {

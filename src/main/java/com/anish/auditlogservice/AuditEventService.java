@@ -377,6 +377,7 @@ public class AuditEventService {
         var events = repository.findAllByOrderBySequenceNumberAsc();
 
         String expectedPreviousHash = GENESIS_HASH;
+        boolean redactedPayloadFound = false;
 
         for (AuditEventEntity event : events) {
                 System.out.println( "Checking sequence: " + event.getSequenceNumber());
@@ -422,6 +423,9 @@ public class AuditEventService {
                                     "Stored payload could not be parsed or verified"
                             );
                         }
+                } else {
+                         // The original payload is unavailable after redaction.
+                        redactedPayloadFound = true;
                 }
 
                 String calculatedHash = calculateStoredEventHash(event);
@@ -438,6 +442,17 @@ public class AuditEventService {
                 expectedPreviousHash = event.getHash();
 
 
+        }
+
+        if (redactedPayloadFound) {
+                return new AuditVerificationResponse(
+                        true,
+                        null,
+                        null,
+                        "Audit chain links and stored event hashes verified successfully."
+                        + " One or more redacted payloads could not be independently"
+                        + " verified against their original payload hashes."
+                );
         }
 
         return new AuditVerificationResponse(
