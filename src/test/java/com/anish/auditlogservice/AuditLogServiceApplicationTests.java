@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.TreeMap;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
@@ -214,6 +215,99 @@ void shouldExportEventsByActorId() {
                 exception.getMessage()
         );
     }
+
+
+    @Test
+    void shouldIncludeVerificationMetadataInExportBundle() {
+        AuditEventRequest request = new AuditEventRequest();
+        request.setEventType("ACCOUNT_UPDATED");
+        request.setActorId("bundle-test-user");
+        request.setResourceType("ACCOUNT");
+        request.setResourceId("bundle-test-account");
+        request.setPayload(Map.of("status", "ACTIVE"));
+
+        auditEventService.createEvent(request);
+
+        AuditEventExportBundle bundle =
+            auditEventService.createExportBundle(
+                    "bundle-test-user", null);
+
+        assertEquals("actorId", bundle.getFilterType());
+        assertEquals("bundle-test-user", bundle.getFilterValue());
+        assertEquals("SHA-256", bundle.getHashAlgorithm());
+        assertNotNull(bundle.getExportedAt());
+        assertNotNull(bundle.getCanonicalization());
+        assertTrue(bundle.getCanonicalization().contains("payloadHash"));
+        assertNotNull(bundle.getVerificationLimitations());
+        assertTrue(bundle.getVerificationLimitations()
+                .contains("predecessor events"));
+        assertEquals(1, bundle.getEvents().size());
+        }
+
+
+    
+@Test
+void shouldPreserveEventHashesInExportBundle() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_UPDATED");
+    request.setActorId("hash-export-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("hash-export-account");
+    request.setPayload(Map.of("status", "ACTIVE"));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    AuditEventExportBundle bundle =
+            auditEventService.createExportBundle(
+                    "hash-export-user", null);
+
+    AuditEventEntity exported = bundle.getEvents().get(0);
+
+    assertEquals(created.getHash(), exported.getHash());
+    assertEquals(created.getPayloadHash(), exported.getPayloadHash());
+    assertEquals(created.getPreviousHash(), exported.getPreviousHash());
+    assertEquals(created.getSequenceNumber(), exported.getSequenceNumber());
+}
+
+
+
+@Test
+void shouldAllowIndependentRecalculationOfExportedEventHash() throws Exception {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_UPDATED");
+    request.setActorId("independent-hash-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("independent-hash-account");
+    request.setPayload(Map.of("status", "ACTIVE"));
+
+    auditEventService.createEvent(request);
+
+    AuditEventExportBundle bundle =
+            auditEventService.createExportBundle(
+                    "independent-hash-user", null);
+
+    AuditEventEntity event = bundle.getEvents().get(0);
+
+    Map<String, Object> hashInput = new TreeMap<>();
+    hashInput.put("id", event.getId().toString());
+    hashInput.put("eventType", event.getEventType());
+    hashInput.put("actorId", event.getActorId());
+    hashInput.put("resourceType", event.getResourceType());
+    hashInput.put("resourceId", event.getResourceId());
+    hashInput.put("payloadHash", event.getPayloadHash());
+    hashInput.put("timestamp", event.getTimestamp().toString());
+    hashInput.put("previousHash", event.getPreviousHash());
+
+    tools.jackson.databind.ObjectMapper mapper =
+            new tools.jackson.databind.ObjectMapper();
+
+    String canonicalInput = mapper.writeValueAsString(hashInput);
+
+    String recalculatedHash = new HashService().sha256(canonicalInput);
+
+    assertEquals(event.getHash(), recalculatedHash);
+}
+
 
 
 }
