@@ -147,5 +147,73 @@ void shouldArchiveExpiredEvents() {
     assertNotNull(archivedEvent.getArchivedAt());
 }
 
+@Test
+void shouldExportEventsByActorId() {
+     AuditEventRequest request = new AuditEventRequest();
+     request.setEventType("ACCOUNT_UPDATED");
+     request.setActorId("export-test-user");
+     request.setResourceType("ACCOUNT");
+     request.setResourceId("export-test-account");
+     request.setPayload(Map.of("status", "ACTIVE"));
+
+     AuditEventEntity created = auditEventService.createEvent(request);
+
+      var events = auditEventService.exportEvents(
+              "export-test-user",
+              null
+      );
+
+        assertEquals(1, events.size());
+        assertEquals(
+                created.getSequenceNumber(),
+                events.get(0).getSequenceNumber()
+        );
+        assertEquals(
+                "export-test-user",
+                events.get(0).getActorId()
+        );
+
+    }
+
+    @Test
+    void shouldExportEventsByResourceId() {
+        AuditEventRequest request = new AuditEventRequest();
+        request.setEventType("ACCOUNT_UPDATED");
+        request.setActorId("resource-export-user");
+        request.setResourceType("ACCOUNT");
+        request.setResourceId("resource-export-account");
+        request.setPayload(Map.of("status", "ACTIVE"));
+
+        AuditEventEntity created = auditEventService.createEvent(request);
+
+        var events = auditEventService.exportEvents(
+                null,
+                "resource-export-account"
+        );
+
+        assertEquals(1, events.size());
+        assertEquals(
+                created.getSequenceNumber(),
+                events.get(0).getSequenceNumber()
+        );
+        assertEquals(
+                "resource-export-account",
+                events.get(0).getResourceId()
+        );
+    }
+
+    @Test
+    void shouldRejectExportWhenBothFiltersAreMissing() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> auditEventService.exportEvents(null, null)
+        );
+
+        assertEquals(
+                "Exactly one of 'actorId' or 'resourceId' must be provided",
+                exception.getMessage()
+        );
+    }
+
 
 }

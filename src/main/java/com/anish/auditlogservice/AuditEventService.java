@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.List;
 import java.time.temporal.ChronoUnit;
 
 @Service
@@ -89,51 +90,6 @@ public class AuditEventService {
         return hashService.sha256(canonicalPayload);
         }
 
-
-
-
-//     private String calculateStoredEventHash(AuditEventEntity event) {
-//         try {   
-//                 if (event.isRedacted()) {
-//                         return null;
-//                 }
-
-//                 Map<String, Object> payload = objectMapper.readValue(
-//                         event.getPayload(),
-//                         objectMapper.getTypeFactory()
-//                                 .constructMapType(
-//                                         TreeMap.class,
-//                                         String.class,
-//                                         Object.class
-//                                 )
-//                 );
-
-//                 String hashInput = createHashInput(
-//                         event.getId(),
-//                         event.getEventType(),
-//                         event.getActorId(),
-//                         event.getResourceType(),
-//                         event.getResourceId(),
-//                         normalizePayload(payload),
-//                         event.getTimestamp(),
-//                         event.getPreviousHash()
-//                 );
-
-//                String calculatedHash = hashService.sha256(hashInput);
-
-//                System.out.println(
-//                 "Verifying sequence " + event.getSequenceNumber()
-//                 + " | stored hash: " + event.getHash()
-//                 + " | calculated hash: " + calculatedHash);
-
-//                return calculatedHash;
-
-        
-//         } catch (JacksonException e) {
-//                 throw new IllegalStateException(
-//                         "Failed to deserialize stored audit payload", e);
-//         }
-//     }
 
     private String calculateStoredEventHash(AuditEventEntity event) {
         try {
@@ -311,6 +267,50 @@ public class AuditEventService {
 
         return repository.findAll(specification, pageable);
     }
+
+
+    public List<AuditEventEntity> exportEvents(String actorId, String resourceId) {
+        boolean hasActorId = actorId != null && !actorId.isBlank();
+        boolean hasResourceId = resourceId != null && !resourceId.isBlank();
+
+        if (hasActorId == hasResourceId) {
+            throw new IllegalArgumentException(
+                    "Exactly one of 'actorId' or 'resourceId' must be provided"
+            );
+        }
+
+        if (hasActorId) {
+                return repository.findAllByActorIdOrderBySequenceNumberAsc(actorId);
+        }
+
+        return repository.findAllByResourceIdOrderBySequenceNumberAsc(resourceId);
+    }
+
+
+    public AuditEventExportBundle createExportBundle(
+           String actorId,
+           String resourceId) {
+
+        List<AuditEventEntity> events = exportEvents(actorId, resourceId);
+
+        boolean hasActorId = actorId != null && !actorId.isBlank();
+
+        return new AuditEventExportBundle(
+                Instant.now(),
+                hasActorId ? "actorId" : "resourceId",
+                hasActorId ? actorId : resourceId,
+                "SHA-256",
+                "Each event's hash can be recalculated from its metadata and "
+                + "payloadHash using the documented SHA-256 canonicalization "
+                + "rules. For non-redacted events, payloadHash can also be "
+                + "checked against the payload. A filtered export may omit "
+                + "predecessor events, so the complete chain cannot be "
+                + "verified from this bundle alone. Redacted payloads cannot "
+                + "be checked against their original contents.",
+                events
+        );
+  }
+
 
 
     public AuditVerificationResponse verifyChain() {

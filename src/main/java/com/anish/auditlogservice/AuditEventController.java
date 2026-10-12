@@ -3,6 +3,7 @@ package com.anish.auditlogservice;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -67,6 +68,23 @@ public class AuditEventController {
     public AuditEventEntity redactPayload(
             @PathVariable Long sequenceNumber) {
         return auditEventService.redactPayload(sequenceNumber);
+    }
+
+    @GetMapping("/export")
+    public AuditEventExportBundle exportEvents(
+        @RequestParam(required = false) String actorId,
+        @RequestParam(required = false) String resourceId) {
+
+        return auditEventService.createExportBundle(actorId, resourceId);
+    }
+
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalArgument(
+            IllegalArgumentException exception) {
+        return ResponseEntity
+                .badRequest()
+                .body(Map.of("error", exception.getMessage()));
     }
 
 }

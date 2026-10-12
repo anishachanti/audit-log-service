@@ -20,6 +20,12 @@ public interface AuditEventRepository
     Page<AuditEventEntity> findByEventType(String eventType, Pageable pageable);
 
     List<AuditEventEntity> findAllByOrderBySequenceNumberAsc();
+
+    List<AuditEventEntity> findAllByActorIdOrderBySequenceNumberAsc(
+        String actorId);
+
+    List<AuditEventEntity> findAllByResourceIdOrderBySequenceNumberAsc(
+        String resourceId);
     
 }
 
