@@ -87,4 +87,22 @@ public class AuditEventController {
                 .body(Map.of("error", exception.getMessage()));
     }
 
+
+    @GetMapping("/compliance/report")
+    public ComplianceReport generateComplianceReport(
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        Instant from,
+        
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        Instant to,
+        @RequestParam(required = false) String actorId,
+        @RequestParam(required = false) String resourceId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size) {
+
+        return auditEventService.generateComplianceReport(from, to, actorId, resourceId, page, size);
+    }
+
 }

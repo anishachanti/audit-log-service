@@ -389,5 +389,42 @@ public class AuditEventService {
         );
    }
 
+
+   
+        public ComplianceReport generateComplianceReport(
+                Instant from,
+                Instant to,
+                String actorId,
+                String resourceId,
+                int page,
+                int size) {
+
+        Page<AuditEventEntity> events = queryEvents(
+                actorId,
+                null,
+                resourceId,
+                null,
+                from,
+                to,
+                page,
+                size
+        );
+
+        AuditVerificationResponse verification = verifyChain();
+
+        return new ComplianceReport(
+                Instant.now(),
+                from,
+                to,
+                resourceId,
+                actorId,
+                events.getTotalElements(),
+                verification.isIntact(),
+                verification.getMessage(),
+                events
+        );
+        }
+
+
 }
 

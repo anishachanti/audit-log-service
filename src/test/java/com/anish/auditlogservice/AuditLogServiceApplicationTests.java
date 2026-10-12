@@ -353,4 +353,87 @@ void shouldVerifyExportedPayloadHash() throws Exception {
 
 
 
+@Test
+void shouldGenerateComplianceReportForResource() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("compliance-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("compliance-test-account");
+    request.setPayload(Map.of("action", "view"));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    ComplianceReport report =
+            auditEventService.generateComplianceReport(
+                    created.getTimestamp().minusSeconds(60),
+                    created.getTimestamp().plusSeconds(60),
+                    null,
+                    "compliance-test-account",
+                    0,
+                    10
+            );
+
+    assertEquals(1, report.getTotalEvents());
+    assertTrue(report.isAuditChainIntact());
+    assertNotNull(report.getGeneratedAt());
+    assertEquals(
+            "compliance-test-account",
+            report.getEvents().getContent().get(0).getResourceId()
+    );
+}
+
+
+
+@Test
+void shouldReturnEmptyComplianceReportWhenNoEventsMatch() {
+    ComplianceReport report =
+            auditEventService.generateComplianceReport(
+                    Instant.parse("2020-01-01T00:00:00Z"),
+                    Instant.parse("2020-01-02T00:00:00Z"),
+                    null,
+                    "nonexistent-compliance-account",
+                    0,
+                    10
+            );
+
+    assertEquals(0, report.getTotalEvents());
+    assertTrue(report.getEvents().isEmpty());
+    assertTrue(report.isAuditChainIntact());
+    assertNotNull(report.getGeneratedAt());
+}
+
+
+
+@Test
+void shouldIncludeAuditChainVerificationStatusInComplianceReport() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("verification-report-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("verification-report-account");
+    request.setPayload(Map.of("action", "view"));
+
+    auditEventService.createEvent(request);
+
+    ComplianceReport report =
+            auditEventService.generateComplianceReport(
+                    null,
+                    null,
+                    "verification-report-user",
+                    null,
+                    0,
+                    10
+            );
+
+    assertTrue(report.isAuditChainIntact());
+    assertEquals(
+            "Audit chain links verified successfully",
+            report.getVerificationMessage()
+    );
+    assertEquals(1, report.getTotalEvents());
+}
+
+
+
 }
