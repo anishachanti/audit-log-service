@@ -56,6 +56,11 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+		<dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-h2console</artifactId>
+        </dependency>
+
         <!-- H2: lightweight local database -->
         <dependency>
             <groupId>com.h2database</groupId>

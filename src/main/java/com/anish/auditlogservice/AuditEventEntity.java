@@ -40,6 +40,9 @@ public class AuditEventEntity {
     private String payload;
 
     @Column(nullable = false)
+    private String payloadHash;
+
+    @Column(nullable = false)
     private Instant timestamp;
 
     @Column(nullable = false)
@@ -52,6 +55,11 @@ public class AuditEventEntity {
     private boolean archived = false;
 
     private Instant archivedAt;
+
+    @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean redacted = false;
+
+    private Instant redactedAt;
 
     public AuditEventEntity() {
     }
@@ -104,6 +112,14 @@ public class AuditEventEntity {
         this.payload = payload;
     }
 
+    public String getPayloadHash() {
+         return payloadHash;
+    }
+
+    public void setPayloadHash(String payloadHash) {
+        this.payloadHash = payloadHash;
+    }
+
     public Instant getTimestamp() {
         return timestamp;
     }
@@ -151,4 +167,21 @@ public class AuditEventEntity {
     public void setArchivedAt(Instant archivedAt) {
         this.archivedAt = archivedAt;
     }
+
+    public boolean isRedacted() {
+    return redacted;
+    }
+
+    public void setRedacted(boolean redacted) {
+    this.redacted = redacted;
+    }
+
+    public Instant getRedactedAt() {
+    return redactedAt;
+    }
+
+    public void setRedactedAt(Instant redactedAt) {
+    this.redactedAt = redactedAt;
+    }
+
 }

@@ -45,7 +45,8 @@ public class AuditEventService {
             String actorId,
             String resourceType,
             String resourceId,
-            Map<String, Object> payload,
+         // Map<String, Object> payload,
+            String payloadHash,
             Instant timestamp,
             String previousHash) throws JacksonException {
 
@@ -55,7 +56,7 @@ public class AuditEventService {
         content.put("actorId", actorId);
         content.put("resourceType", resourceType);
         content.put("resourceId", resourceId);
-        content.put("payload", payload);
+        content.put("payloadHash", payloadHash);
         content.put("timestamp", timestamp.toString());
         content.put("previousHash", previousHash);
 
@@ -76,48 +77,82 @@ public class AuditEventService {
                                 Object.class
                         )
         );
-     }
-
-
+    }
     
-     private String calculateStoredEventHash(AuditEventEntity event) {
-        try {
-                Map<String, Object> payload = objectMapper.readValue(
-                        event.getPayload(),
-                        objectMapper.getTypeFactory()
-                                .constructMapType(
-                                        TreeMap.class,
-                                        String.class,
-                                        Object.class
-                                )
+
+    private String calculatePayloadHash(Map<String, Object> payload)
+        throws JacksonException {
+                String canonicalPayload = objectMapper.writeValueAsString(
+                normalizePayload(payload)
                 );
 
+        return hashService.sha256(canonicalPayload);
+        }
+
+
+
+
+//     private String calculateStoredEventHash(AuditEventEntity event) {
+//         try {   
+//                 if (event.isRedacted()) {
+//                         return null;
+//                 }
+
+//                 Map<String, Object> payload = objectMapper.readValue(
+//                         event.getPayload(),
+//                         objectMapper.getTypeFactory()
+//                                 .constructMapType(
+//                                         TreeMap.class,
+//                                         String.class,
+//                                         Object.class
+//                                 )
+//                 );
+
+//                 String hashInput = createHashInput(
+//                         event.getId(),
+//                         event.getEventType(),
+//                         event.getActorId(),
+//                         event.getResourceType(),
+//                         event.getResourceId(),
+//                         normalizePayload(payload),
+//                         event.getTimestamp(),
+//                         event.getPreviousHash()
+//                 );
+
+//                String calculatedHash = hashService.sha256(hashInput);
+
+//                System.out.println(
+//                 "Verifying sequence " + event.getSequenceNumber()
+//                 + " | stored hash: " + event.getHash()
+//                 + " | calculated hash: " + calculatedHash);
+
+//                return calculatedHash;
+
+        
+//         } catch (JacksonException e) {
+//                 throw new IllegalStateException(
+//                         "Failed to deserialize stored audit payload", e);
+//         }
+//     }
+
+    private String calculateStoredEventHash(AuditEventEntity event) {
+        try {
                 String hashInput = createHashInput(
                         event.getId(),
                         event.getEventType(),
                         event.getActorId(),
                         event.getResourceType(),
                         event.getResourceId(),
-                        normalizePayload(payload),
+                        event.getPayloadHash(),
                         event.getTimestamp(),
                         event.getPreviousHash()
-                );
-
-               String calculatedHash = hashService.sha256(hashInput);
-
-               System.out.println(
-                "Verifying sequence " + event.getSequenceNumber()
-                + " | stored hash: " + event.getHash()
-                + " | calculated hash: " + calculatedHash);
-
-               return calculatedHash;
-
-        
-        } catch (JacksonException e) {
-                throw new IllegalStateException(
-                        "Failed to deserialize stored audit payload", e);
-        }
-    }
+                         );
+                        return hashService.sha256(hashInput);
+                         } catch (JacksonException e) {
+                                throw new IllegalStateException(
+                                         "Failed to calculate stored audit event hash", e);
+                                         }
+     }
 
 
     public AuditEventEntity createEvent(AuditEventRequest request) {
@@ -139,6 +174,7 @@ public class AuditEventService {
                 objectMapper.writeValueAsString(normalizePayload(request.getPayload()));
 
         // JsonNode canonicalPayload = objectMapper.readTree(payloadJson);
+        String payloadHash = calculatePayloadHash(request.getPayload());
 
         String hashInput = createHashInput(
                 id,
@@ -146,7 +182,8 @@ public class AuditEventService {
                 request.getActorId(),
                 request.getResourceType(),
                 request.getResourceId(),
-                normalizePayload(request.getPayload()),
+                // normalizePayload(request.getPayload()),
+                payloadHash,
                 timestamp,
                 previousHash
         );
@@ -160,6 +197,7 @@ public class AuditEventService {
         event.setResourceType(request.getResourceType());
         event.setResourceId(request.getResourceId());
         event.setPayload(payloadJson);
+        event.setPayloadHash(payloadHash);
         event.setTimestamp(timestamp);
         event.setPreviousHash(previousHash);
         event.setHash(hash);
@@ -216,6 +254,23 @@ public class AuditEventService {
     }
 
 
+    public AuditEventEntity redactPayload(Long sequenceNumber) {
+        AuditEventEntity event = repository.findById(sequenceNumber)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Audit event not found: " + sequenceNumber
+                ));
+
+        if (!event.isRedacted()) {
+                event.setPayload("[REDACTED]");
+                event.setRedacted(true);
+                event.setRedactedAt(Instant.now());
+
+                return repository.save(event);
+        }
+        return event;
+    }
+
+
     public Page<AuditEventEntity> queryEvents(
             String actorId,
             String resourceType,
@@ -269,24 +324,56 @@ public class AuditEventService {
 
                 // Check whether this event links to the previous event.
                 if (!expectedPreviousHash.equals(event.getPreviousHash())) {
-                return new AuditVerificationResponse(
-                        false,
-                        event.getSequenceNumber(),
-                        "PREVIOUS_HASH_MISMATCH",
-                        "Previous hash does not match the preceding event"
-                );
+                        return new AuditVerificationResponse(
+                                false,
+                                event.getSequenceNumber(),
+                                "PREVIOUS_HASH_MISMATCH",
+                                "Previous hash does not match the preceding event"
+                        );
                 }
 
                 
+                if (!event.isRedacted()) {
+                        try {
+                            Map<String, Object> payload = objectMapper.readValue(
+                                    event.getPayload(),
+                                    objectMapper.getTypeFactory()
+                                            .constructMapType(
+                                                    TreeMap.class,
+                                                    String.class,
+                                                    Object.class
+                                            )
+                            );
+
+                            String calculatedPayloadHash = calculatePayloadHash(payload);
+
+                            if (!calculatedPayloadHash.equals(event.getPayloadHash())) {
+                                return new AuditVerificationResponse(
+                                        false,
+                                        event.getSequenceNumber(),
+                                        "PAYLOAD_HASH_MISMATCH",
+                                        "Stored payload does not match its payload hash"
+                                );
+                            }
+                        } catch (JacksonException e) {
+                            return new AuditVerificationResponse(
+                                    false,
+                                    event.getSequenceNumber(),
+                                    "INVALID_PAYLOAD",
+                                    "Stored payload could not be parsed or verified"
+                            );
+                        }  
+                }           
+
                 String calculatedHash = calculateStoredEventHash(event);
 
                 if (!calculatedHash.equals(event.getHash())) {
-                return new AuditVerificationResponse(
-                        false,
-                        event.getSequenceNumber(),
-                        "CONTENT_HASH_MISMATCH",
-                        "Event content does not match its stored hash"
-                );
+                        return new AuditVerificationResponse(
+                                false,
+                                event.getSequenceNumber(),
+                                "CONTENT_HASH_MISMATCH",
+                                "Event content does not match its stored hash"
+                        );
                 }
 
                 expectedPreviousHash = event.getHash();

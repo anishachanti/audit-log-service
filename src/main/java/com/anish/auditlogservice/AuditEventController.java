@@ -63,4 +63,10 @@ public class AuditEventController {
         );
     }
 
+    @PatchMapping("/{sequenceNumber}/redact")
+    public AuditEventEntity redactPayload(
+            @PathVariable Long sequenceNumber) {
+        return auditEventService.redactPayload(sequenceNumber);
+    }
+
 }
