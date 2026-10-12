@@ -64,7 +64,7 @@ public class AuditEventService {
         return objectMapper.writeValueAsString(content);
     }
 
-    
+
     private Map<String, Object> normalizePayload(Map<String, Object> payload)
                 throws JacksonException {
         String payloadJson = objectMapper.writeValueAsString(payload);
@@ -79,7 +79,7 @@ public class AuditEventService {
                         )
         );
     }
-    
+
 
     private String calculatePayloadHash(Map<String, Object> payload)
         throws JacksonException {
@@ -124,7 +124,7 @@ public class AuditEventService {
                 ? GENESIS_HASH
                 : previousEvent.getHash();
 
-        
+
     try {
         String payloadJson =
                 objectMapper.writeValueAsString(normalizePayload(request.getPayload()));
@@ -186,7 +186,7 @@ public class AuditEventService {
         if (retentionDays < 1) {
             throw new IllegalArgumentException(
                     "Retention days must be at least 1"
-            ); 
+            );
         }
 
         Instant cutoff = Instant.now()
@@ -210,21 +210,80 @@ public class AuditEventService {
     }
 
 
-    public AuditEventEntity redactPayload(Long sequenceNumber) {
+//     public AuditEventEntity redactPayload(Long sequenceNumber) {
+//         AuditEventEntity event = repository.findById(sequenceNumber)
+//                 .orElseThrow(() -> new IllegalArgumentException(
+//                         "Audit event not found: " + sequenceNumber
+//                 ));
+
+//         if (!event.isRedacted()) {
+//                 event.setPayload("[REDACTED]");
+//                 event.setRedacted(true);
+//                 event.setRedactedAt(Instant.now());
+
+//                 return repository.save(event);
+//         }
+//         return event;
+//     }
+
+
+        public AuditEventEntity redactPayload(
+                Long sequenceNumber,
+                List<String> fields) {
+
+        if (fields == null || fields.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "At least one field must be provided for redaction");
+        }
+
+        if (fields.stream().anyMatch(
+                field -> field == null || field.isBlank())) {
+                throw new IllegalArgumentException(
+                        "Redaction field names must not be blank");
+        }
+
         AuditEventEntity event = repository.findById(sequenceNumber)
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "Audit event not found: " + sequenceNumber
-                ));
+                        "Audit event not found: " + sequenceNumber));
 
-        if (!event.isRedacted()) {
-                event.setPayload("[REDACTED]");
+        if (event.isRedacted()) {
+                throw new IllegalArgumentException(
+                        "Audit event has already been redacted");
+        }
+
+        try {
+                Map<String, Object> payload = objectMapper.readValue(
+                        event.getPayload(),
+                        objectMapper.getTypeFactory().constructMapType(
+                                TreeMap.class,
+                                String.class,
+                                Object.class));
+
+                for (String field : fields) {
+                if (!payload.containsKey(field)) {
+                        throw new IllegalArgumentException(
+                                "Payload field not found: " + field);
+                }
+                }
+
+                for (String field : fields) {
+                payload.put(field, "[REDACTED]");
+                }
+
+                event.setPayload(objectMapper.writeValueAsString(payload));
                 event.setRedacted(true);
                 event.setRedactedAt(Instant.now());
 
+                // Preserve payloadHash and hash to maintain the existing chain.
                 return repository.save(event);
+
+        } catch (JacksonException exception) {
+                throw new IllegalArgumentException(
+                        "Stored payload could not be parsed for redaction",
+                        exception);
         }
-        return event;
     }
+
 
 
     public Page<AuditEventEntity> queryEvents(
@@ -332,7 +391,7 @@ public class AuditEventService {
                         );
                 }
 
-                
+
                 if (!event.isRedacted()) {
                         try {
                             Map<String, Object> payload = objectMapper.readValue(
@@ -362,8 +421,8 @@ public class AuditEventService {
                                     "INVALID_PAYLOAD",
                                     "Stored payload could not be parsed or verified"
                             );
-                        }  
-                }           
+                        }
+                }
 
                 String calculatedHash = calculateStoredEventHash(event);
 
@@ -378,7 +437,7 @@ public class AuditEventService {
 
                 expectedPreviousHash = event.getHash();
 
-                
+
         }
 
         return new AuditVerificationResponse(
@@ -390,7 +449,7 @@ public class AuditEventService {
    }
 
 
-   
+
         public ComplianceReport generateComplianceReport(
                 Instant from,
                 Instant to,

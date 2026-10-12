@@ -436,4 +436,152 @@ void shouldIncludeAuditChainVerificationStatusInComplianceReport() {
 
 
 
+@Test
+void shouldRedactSelectedPayloadFieldsAndPreserveHashChain() throws Exception {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("redaction-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("redaction-test-account");
+    request.setPayload(Map.of(
+            "accountNumber", "123456789",
+            "email", "user@example.com",
+            "action", "VIEW"
+    ));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+    String originalHash = created.getHash();
+    String originalPayloadHash = created.getPayloadHash();
+
+    AuditEventEntity redacted = auditEventService.redactPayload(
+            created.getSequenceNumber(),
+            java.util.List.of("accountNumber", "email")
+    );
+
+    tools.jackson.databind.ObjectMapper mapper =
+            new tools.jackson.databind.ObjectMapper();
+
+    Map<String, Object> payload = mapper.readValue(
+            redacted.getPayload(),
+            mapper.getTypeFactory().constructMapType(
+                    TreeMap.class,
+                    String.class,
+                    Object.class
+            )
+    );
+
+    assertEquals("[REDACTED]", payload.get("accountNumber"));
+    assertEquals("[REDACTED]", payload.get("email"));
+    assertEquals("VIEW", payload.get("action"));
+    assertEquals(originalHash, redacted.getHash());
+    assertEquals(originalPayloadHash, redacted.getPayloadHash());
+    assertTrue(redacted.isRedacted());
+
+    AuditVerificationResponse verification =
+            auditEventService.verifyChain();
+
+    assertTrue(verification.isIntact(), verification.getMessage());
+}
+
+
+
+@Test
+void shouldRejectUnknownRedactionField() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("redaction-validation-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("redaction-validation-account");
+    request.setPayload(Map.of("action", "VIEW"));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> auditEventService.redactPayload(
+                    created.getSequenceNumber(),
+                    java.util.List.of("unknownField"))
+    );
+
+    assertEquals(
+            "Payload field not found: unknownField",
+            exception.getMessage()
+    );
+}
+
+
+
+@Test
+void shouldRejectEmptyRedactionFieldList() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("empty-redaction-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("empty-redaction-test-account");
+    request.setPayload(Map.of("action", "VIEW"));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> auditEventService.redactPayload(
+                    created.getSequenceNumber(),
+                    java.util.List.of())
+    );
+
+    assertEquals(
+            "At least one field must be provided for redaction",
+            exception.getMessage()
+    );
+}
+
+@Test
+void shouldRejectRedactionForNonexistentEvent() {
+    IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> auditEventService.redactPayload(
+                    Long.MAX_VALUE,
+                    java.util.List.of("accountNumber"))
+    );
+
+    assertEquals(
+            "Audit event not found: " + Long.MAX_VALUE,
+            exception.getMessage()
+    );
+}
+
+@Test
+void shouldRejectRedactingAnAlreadyRedactedEvent() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("repeat-redaction-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("repeat-redaction-test-account");
+    request.setPayload(Map.of(
+            "accountNumber", "123456789",
+            "action", "VIEW"
+    ));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    auditEventService.redactPayload(
+            created.getSequenceNumber(),
+            java.util.List.of("accountNumber")
+    );
+
+    IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> auditEventService.redactPayload(
+                    created.getSequenceNumber(),
+                    java.util.List.of("action"))
+    );
+
+    assertEquals(
+            "Audit event has already been redacted",
+            exception.getMessage()
+    );
+}
+
+
+
 }

@@ -28,7 +28,7 @@ public class AuditEventController {
         return auditEventService.createEvent(request);
     }
 
-    
+
     @GetMapping
     public Page<AuditEventEntity> queryEvents(
             @RequestParam(required = false) String actorId,
@@ -64,11 +64,23 @@ public class AuditEventController {
         );
     }
 
+    // @PatchMapping("/{sequenceNumber}/redact")
+    // public AuditEventEntity redactPayload(
+    //         @PathVariable Long sequenceNumber) {
+    //     return auditEventService.redactPayload(sequenceNumber);
+    // }
+
+
     @PatchMapping("/{sequenceNumber}/redact")
     public AuditEventEntity redactPayload(
-            @PathVariable Long sequenceNumber) {
-        return auditEventService.redactPayload(sequenceNumber);
+            @PathVariable Long sequenceNumber,
+            @RequestBody RedactionRequest request) {
+
+        return auditEventService.redactPayload(
+                sequenceNumber,
+                request.fields());
     }
+
 
     @GetMapping("/export")
     public AuditEventExportBundle exportEvents(
@@ -93,7 +105,7 @@ public class AuditEventController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
         Instant from,
-        
+
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
         Instant to,
