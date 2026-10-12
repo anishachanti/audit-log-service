@@ -309,5 +309,48 @@ void shouldAllowIndependentRecalculationOfExportedEventHash() throws Exception {
 }
 
 
+@Test
+void shouldVerifyExportedPayloadHash() throws Exception {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_UPDATED");
+    request.setActorId("payload-hash-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("payload-hash-test-account");
+    request.setPayload(Map.of(
+            "status", "ACTIVE",
+            "action", "UPDATE"
+    ));
+
+    auditEventService.createEvent(request);
+
+    AuditEventExportBundle bundle =
+            auditEventService.createExportBundle(
+                    "payload-hash-test-user", null);
+
+    AuditEventEntity exported = bundle.getEvents().get(0);
+
+    assertFalse(exported.isRedacted());
+
+    tools.jackson.databind.ObjectMapper mapper =
+            new tools.jackson.databind.ObjectMapper();
+
+    Map<String, Object> canonicalPayload = mapper.readValue(
+            exported.getPayload(),
+            mapper.getTypeFactory().constructMapType(
+                    java.util.TreeMap.class,
+                    String.class,
+                    Object.class
+            )
+    );
+
+    String canonicalJson = mapper.writeValueAsString(canonicalPayload);
+
+    String recalculatedPayloadHash =
+            new HashService().sha256(canonicalJson);
+
+    assertEquals(exported.getPayloadHash(), recalculatedPayloadHash);
+}
+
+
 
 }
