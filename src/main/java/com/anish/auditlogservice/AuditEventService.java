@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Map;
@@ -26,6 +27,8 @@ public class AuditEventService {
     private final AuditEventRepository repository;
     private final HashService hashService;
     private final ObjectMapper objectMapper;
+    private final RedactionRecordRepository redactionRecordRepository;
+    private final RedactionSignatureService redactionSignatureService;
 
     @Value("${audit.retention.days:365}")
     private int retentionDays;
@@ -33,11 +36,15 @@ public class AuditEventService {
     public AuditEventService(
             AuditEventRepository repository,
             HashService hashService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            RedactionRecordRepository redactionRecordRepository,
+            RedactionSignatureService redactionSignatureService) {
 
         this.repository = repository;
         this.hashService = hashService;
         this.objectMapper = objectMapper;
+        this.redactionRecordRepository = redactionRecordRepository;
+        this.redactionSignatureService = redactionSignatureService;
     }
 
     private String createHashInput(
@@ -88,6 +95,59 @@ public class AuditEventService {
                 );
 
         return hashService.sha256(canonicalPayload);
+        }
+
+    
+    private boolean verifyRedactionRecord(AuditEventEntity event) {
+        var recordOptional = redactionRecordRepository
+                .findByEventSequenceNumber(event.getSequenceNumber());
+
+        if (recordOptional.isEmpty()) {
+                return false;
+        }
+
+        RedactionRecordEntity record = recordOptional.get();
+
+        if (!event.getSequenceNumber().equals(record.getEventSequenceNumber())
+                || !event.getPayloadHash().equals(record.getOriginalPayloadHash())
+                || !event.getRedactedAt().equals(record.getRedactedAt())) {
+                return false;
+        }
+
+        try {
+                Map<String, Object> payload = objectMapper.readValue(
+                        event.getPayload(),
+                        objectMapper.getTypeFactory().constructMapType(
+                                TreeMap.class,
+                                String.class,
+                                Object.class));
+
+                List<String> redactedFields = objectMapper.readValue(
+                        record.getRedactedFieldsJson(),
+                        objectMapper.getTypeFactory().constructCollectionType(
+                                List.class,
+                                String.class));
+
+                String actualRedactedPayloadHash = calculatePayloadHash(payload);
+
+                if (!actualRedactedPayloadHash.equals(record.getRedactedPayloadHash())) {
+                return false;
+                }
+
+                String canonicalRecord = redactionSignatureService.canonicalize(
+                        record.getEventSequenceNumber(),
+                        record.getOriginalPayloadHash(),
+                        record.getRedactedPayloadHash(),
+                        redactedFields,
+                        record.getRedactedAt());
+
+                return redactionSignatureService.verify(
+                        canonicalRecord,
+                        record.getSignature());
+
+        } catch (JacksonException exception) {
+                return false;
+        }
         }
 
 
@@ -226,7 +286,7 @@ public class AuditEventService {
 //         return event;
 //     }
 
-
+        @Transactional
         public AuditEventEntity redactPayload(
                 Long sequenceNumber,
                 List<String> fields) {
@@ -270,11 +330,40 @@ public class AuditEventService {
                 payload.put(field, "[REDACTED]");
                 }
 
+                Instant redactedAt = Instant.now();
+                List<String> canonicalFields = fields.stream()
+                        .distinct()
+                        .sorted()
+                        .toList();
+
+                String originalPayloadHash = event.getPayloadHash();
+                String redactedPayloadHash = calculatePayloadHash(payload);
+                String redactedFieldsJson = objectMapper.writeValueAsString(canonicalFields);
+                
+                String canonicalRecord = redactionSignatureService.canonicalize(
+                        event.getSequenceNumber(),
+                        originalPayloadHash,
+                        redactedPayloadHash,
+                        canonicalFields,
+                        redactedAt
+                );
+                String signature = redactionSignatureService.sign(canonicalRecord);
+
+                RedactionRecordEntity redactionRecord = new RedactionRecordEntity(
+                        event.getSequenceNumber(),
+                        originalPayloadHash,
+                        redactedPayloadHash,
+                        redactedFieldsJson,
+                        redactedAt,
+                        signature
+                );
+
                 event.setPayload(objectMapper.writeValueAsString(payload));
                 event.setRedacted(true);
-                event.setRedactedAt(Instant.now());
+                event.setRedactedAt(redactedAt);
 
                 // Preserve payloadHash and hash to maintain the existing chain.
+                redactionRecordRepository.save(redactionRecord);
                 return repository.save(event);
 
         } catch (JacksonException exception) {
@@ -424,8 +513,16 @@ public class AuditEventService {
                             );
                         }
                 } else {
-                        // We can verify the stored commitment in the event hash,
-                        // but cannot recalculate it from the removed payload.
+
+                        if (!verifyRedactionRecord(event)) {
+                                return new AuditVerificationResponse(
+                                        false,
+                                        event.getSequenceNumber(),
+                                        "REDACTION_PROOF_INVALID",
+                                        "Redacted record is missing or its signature or payload commitment is invalid"
+                                );
+                        }
+                        
                         redactedSequenceNumbers.add(event.getSequenceNumber());
                 }
 

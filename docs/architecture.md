@@ -100,7 +100,7 @@ The service uses SHA-256 to calculate payload and event hashes. The event hash i
 
 
 
-During verification, the service checks previous-hash links and recalculates event hashes. For non-redacted events, it also recalculates the payload hash from the stored payload. For redacted events, it checks the chain and event hash against the preserved payload hash, but cannot recalculate the removed content. The response reports `PARTIAL_REDACTED` and identifies the affected sequence numbers.
+During verification, the service checks previous-hash links and recalculates event hashes. For non-redacted events, it recalculates the payload hash from the stored payload. For redacted events, it requires a redaction record, verifies its HMAC-SHA256 signature, confirms the record is tied to the event payload hash, and recalculates the current redacted payload hash. The response reports `PARTIAL_REDACTED` because the removed original content cannot be recalculated, and identifies the affected sequence numbers.
 
 
 
@@ -156,7 +156,7 @@ Archival metadata allows records to be marked as archived without physically del
 
 
 
-Selected top-level payload fields are replaced with redaction markers while retaining the original payload hash and event hash. This preserves the chain's stored hash relationships, but the removed values cannot be independently rehashed. Nested fields are not supported.
+Selected top-level payload fields are replaced with redaction markers while retaining the original payload hash and event hash. The service stores a separate redaction record containing the event sequence number, original and redacted payload hashes, selected field names, and redaction time; an HMAC-SHA256 signature covers those values. Verification rejects a missing or invalid record and detects changes to the current redacted payload. It still cannot reconstruct or independently rehash the removed original values. Nested fields are not supported. The HMAC key must remain secret and stable for existing proofs to remain verifiable; HMAC proofs are not publicly verifiable.
 
 
 

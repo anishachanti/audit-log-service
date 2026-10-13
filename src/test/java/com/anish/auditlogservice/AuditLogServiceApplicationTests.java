@@ -23,6 +23,9 @@ class AuditLogServiceApplicationTests {
     @Autowired
     private AuditEventRepository auditEventRepository;
 
+    @Autowired
+    private RedactionRecordRepository redactionRecordRepository;
+
     @Test
     void contextLoads() {
         assertNotNull(auditEventService);
@@ -515,6 +518,77 @@ void shouldReportRedactionLimitationDuringChainVerification() throws Exception {
     assertTrue(
             response.getMessage().contains("original payload hashes"),
             response.getMessage()
+    );
+}
+
+
+@Test
+void shouldDetectTamperingWithRedactedPayload() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("redaction-tampering-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("redaction-tampering-account");
+    request.setPayload(Map.of(
+            "accountNumber", "123456789",
+            "action", "VIEW"
+    ));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    AuditEventEntity redacted = auditEventService.redactPayload(
+            created.getSequenceNumber(),
+            java.util.List.of("accountNumber")
+    );
+
+    // Simulate an unauthorized change to the stored payload.
+    redacted.setPayload(
+            "{\"accountNumber\":\"ATTACKER-CHANGED\",\"action\":\"VIEW\"}");
+    auditEventRepository.saveAndFlush(redacted);
+
+    AuditVerificationResponse response = auditEventService.verifyChain();
+
+    assertFalse(response.isIntact());
+    assertEquals("REDACTION_PROOF_INVALID", response.getViolationType());
+    assertEquals(
+            created.getSequenceNumber(),
+            response.getFirstInvalidSequenceNumber()
+    );
+}
+
+@Test
+void shouldRejectRedactedEventWhenProofRecordIsMissing() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("missing-proof-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("missing-proof-test-account");
+    request.setPayload(Map.of(
+            "accountNumber", "123456789",
+            "action", "VIEW"
+    ));
+
+    AuditEventEntity created = auditEventService.createEvent(request);
+
+    auditEventService.redactPayload(
+            created.getSequenceNumber(),
+            java.util.List.of("accountNumber")
+    );
+
+    RedactionRecordEntity record = redactionRecordRepository
+            .findByEventSequenceNumber(created.getSequenceNumber())
+            .orElseThrow();
+
+    redactionRecordRepository.delete(record);
+    redactionRecordRepository.flush();
+
+    AuditVerificationResponse response = auditEventService.verifyChain();
+
+    assertFalse(response.isIntact());
+    assertEquals("REDACTION_PROOF_INVALID", response.getViolationType());
+    assertEquals(
+            created.getSequenceNumber(),
+            response.getFirstInvalidSequenceNumber()
     );
 }
 

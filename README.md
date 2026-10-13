@@ -213,6 +213,24 @@ Use the returned event `sequenceNumber` and payload fields appropriate to your d
 
 
 ## Configuration
+### Redaction proof key
+
+The application requires `AUDIT_REDACTION_HMAC_KEY_BASE64` to sign and verify redaction records. Set it to a Base64-encoded random key of at least 32 bytes. Keep the key outside the repository; the key in `src/test/resources/application.properties` is for tests only.
+
+For a temporary key in PowerShell, run this in the project folder, then start the app in the same terminal:
+
+```powershell
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$env:AUDIT_REDACTION_HMAC_KEY_BASE64 = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+Remove-Variable bytes, rng
+
+.\mvnw.cmd spring-boot:run
+```
+
+The generated key is available only in that terminal session. Generate and securely store a stable key for environments where the same redaction records must remain verifiable across restarts.
 
 
 
@@ -261,7 +279,7 @@ Run the automated test suite:
 
 
 
-The current suite covers core event operations, integrity verification, archival, export, compliance reporting, and field-level redaction validation. The latest successful run completed 22 tests with no failures or errors.
+The suite covers core event operations, integrity verification, archival, export, compliance reporting, field-level redaction validation, and redaction-proof tampering cases. The latest full test run passed.
 
 
 
@@ -271,7 +289,7 @@ The current suite covers core event operations, integrity verification, archival
 
 - A hash chain provides tamper evidence but is not tamper-proof if an attacker can modify records and recalculate hashes.
 
-- After redaction, the chain and stored payload commitment can be checked, but the removed original payload cannot be rehashed. `/audit/verify` reports `PARTIAL_REDACTED` and lists affected event sequence numbers.
+- For redacted events, `/audit/verify` checks the HMAC-SHA256 signature on the redaction record, confirms the record is tied to the event payload hash, and checks the current redacted payload against its signed hash. It reports `PARTIAL_REDACTED` because the removed original payload cannot be reconstructed or rehashed. Verification depends on keeping the HMAC key secret and stable; anyone with the key can create valid signatures, and HMAC proofs are not independently verifiable by the public.
 
 - Filtered exports may not contain the full chain history, and hash metadata alone does not authenticate the exporter.
 

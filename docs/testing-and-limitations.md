@@ -60,9 +60,11 @@ The current test suite includes tests for:
 
 - Including chain-verification status in compliance reports.
 
+- Verifying signed redaction records and detecting tampered redacted payloads or missing proof records.
 
 
-The latest successful automated test run completed with 22 tests passing, zero failures, and zero errors. The suite covers core event operations, integrity verification, retention, export, compliance reporting, and field-level redaction validation.
+
+The latest full automated test run passed. The suite covers core event operations, integrity verification, retention, export, compliance reporting, field-level redaction validation, and redaction-proof tampering cases.
 
 
 
@@ -90,7 +92,7 @@ Manual checks performed during development included:
 
 - Confirmed the original payload hash and event hash were preserved.
 
-- Confirmed `/audit/verify` returned `intact: true` and `payloadVerificationStatus: PARTIAL_REDACTED` after redaction, with the redacted event sequence number listed.
+- Confirmed `/audit/verify` returned `intact: true` and `payloadVerificationStatus: PARTIAL_REDACTED` after valid redaction, with the redacted event sequence number listed.
 
 - Calling export endpoints with valid and invalid filters.
 
@@ -116,7 +118,7 @@ A hash chain does not independently prevent a privileged attacker from changing 
 
 
 
-After a payload is redacted, its original contents are unavailable for rehashing. Verification relies on the preserved payload hash and event hash inputs rather than comparing the removed content.
+After a payload is redacted, its original contents are unavailable for reconstruction or rehashing. Verification checks the signed redaction record and current redacted payload against the preserved hashes, but this does not independently prove the erased original contents. Verification depends on the HMAC key remaining secret and stable; anyone with the key can create valid signatures, and HMAC proofs are not publicly verifiable.
 
 
 
