@@ -29,6 +29,7 @@ public class AuditEventService {
     private final ObjectMapper objectMapper;
     private final RedactionRecordRepository redactionRecordRepository;
     private final RedactionSignatureService redactionSignatureService;
+    private final AuditChainHeadRepository chainHeadRepository;
 
     @Value("${audit.retention.days:365}")
     private int retentionDays;
@@ -38,13 +39,15 @@ public class AuditEventService {
             HashService hashService,
             ObjectMapper objectMapper,
             RedactionRecordRepository redactionRecordRepository,
-            RedactionSignatureService redactionSignatureService) {
+            RedactionSignatureService redactionSignatureService,
+            AuditChainHeadRepository chainHeadRepository) {
 
         this.repository = repository;
         this.hashService = hashService;
         this.objectMapper = objectMapper;
         this.redactionRecordRepository = redactionRecordRepository;
         this.redactionSignatureService = redactionSignatureService;
+        this.chainHeadRepository = chainHeadRepository;
     }
 
     private String createHashInput(
@@ -170,19 +173,18 @@ public class AuditEventService {
                                          }
      }
 
-
+    @Transactional
     public AuditEventEntity createEvent(AuditEventRequest request) {
         UUID id = UUID.randomUUID();
         // Instant timestamp = Instant.now();
         Instant timestamp = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
-        AuditEventEntity previousEvent =
-                repository.findTopByOrderBySequenceNumberDesc()
-                        .orElse(null);
+        AuditChainHeadEntity chainHead = chainHeadRepository
+        .findByIdForUpdate(AuditChainHeadEntity.SINGLETON_ID)
+        .orElseThrow(() -> new IllegalStateException(
+                "Audit chain head has not been initialized"));
 
-        String previousHash = previousEvent == null
-                ? GENESIS_HASH
-                : previousEvent.getHash();
+        String previousHash = chainHead.getLastHash();        
 
 
     try {
@@ -218,7 +220,15 @@ public class AuditEventService {
         event.setPreviousHash(previousHash);
         event.setHash(hash);
 
-        return repository.save(event);
+        AuditEventEntity savedEvent = repository.save(event);
+
+        chainHead.update(
+                savedEvent.getSequenceNumber(),
+                savedEvent.getHash()
+        );
+        chainHeadRepository.save(chainHead);
+
+        return savedEvent;
 
     } catch (JacksonException e) {
         throw new IllegalStateException(
