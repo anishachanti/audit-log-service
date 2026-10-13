@@ -1,8 +1,8 @@
-\# Audit Log Service — Architecture Overview
+# Audit Log Service — Architecture Overview
 
 
 
-\## 1. Purpose
+## 1. Purpose
 
 
 
@@ -12,37 +12,37 @@ The Audit Log Service is a Java and Spring Boot REST API that records audit even
 
 The prototype implements three scenarios:
 
-\- Scenario A: Core audit logging and integrity verification.
+- Scenario A: Core audit logging and integrity verification.
 
-\- Scenario B: Retention-based archival, payload redaction, and bulk export.
+- Scenario B: Retention-based archival, payload redaction, and bulk export.
 
-\- Scenario C: Compliance reporting for recorded account-related activity.
-
-
-
-\## 2. Technology Stack
+- Scenario C: Compliance reporting for recorded account-related activity.
 
 
 
-\- Java
-
-\- Spring Boot
-
-\- Spring Data JPA
-
-\- H2 file-based database
-
-\- Maven
-
-\- SHA-256 for payload and event hashes
+## 2. Technology Stack
 
 
 
-\## 3. Architecture Components
+- Java
+
+- Spring Boot
+
+- Spring Data JPA
+
+- H2 file-based database
+
+- Maven
+
+- SHA-256 for payload and event hashes
 
 
 
-\### Controller
+## 3. Architecture Components
+
+
+
+### Controller
 
 
 
@@ -50,7 +50,7 @@ The prototype implements three scenarios:
 
 
 
-\### Service
+### Service
 
 
 
@@ -58,7 +58,7 @@ The prototype implements three scenarios:
 
 
 
-\### Repository
+### Repository
 
 
 
@@ -66,7 +66,7 @@ The Spring Data JPA repository persists audit events and retrieves them using id
 
 
 
-\### Entity and DTOs
+### Entity and DTOs
 
 
 
@@ -80,7 +80,7 @@ The Spring Data JPA repository persists audit events and retrieves them using id
 
 
 
-\## 4. Data Model
+## 4. Data Model
 
 
 
@@ -92,7 +92,7 @@ The first event uses a defined genesis value as its previous hash. Subsequent ev
 
 
 
-\## 5. Hash Chain Design
+## 5. Hash Chain Design
 
 
 
@@ -108,23 +108,23 @@ SHA-256 is used for integrity checking, not encryption. A hash chain provides ta
 
 
 
-\## 6. API Design
+## 6. API Design
 
 
 
 The API includes:
 
-\- Event creation and filtered, paginated queries.
+- Event creation and filtered, paginated queries.
 
-\- Full-chain verification.
+- Full-chain verification.
 
-\- Explicit event archival and retention-based archival.
+- Explicit event archival and retention-based archival.
 
-\- Payload redaction.
+- Payload redaction.
 
-\- Bulk export filtered by actor ID or resource ID.
+- Bulk export filtered by actor ID or resource ID.
 
-\- Compliance reporting with date filters, optional actor/resource filters, pagination, total matching events, and chain-verification status.
+- Compliance reporting with date filters, optional actor/resource filters, pagination, total matching events, and chain-verification status.
 
 
 
@@ -132,11 +132,11 @@ Invalid query parameters, including an invalid date range or invalid export-filt
 
 
 
-\## 7. Key Design Decisions and Trade-offs
+## 7. Key Design Decisions and Trade-offs
 
 
 
-\### File-based H2 database
+### File-based H2 database
 
 
 
@@ -144,7 +144,7 @@ H2 provides a simple local persistence layer suitable for a self-contained asses
 
 
 
-\### Retention through archival
+### Retention through archival
 
 
 
@@ -152,7 +152,7 @@ Archival metadata allows records to be marked as archived without physically del
 
 
 
-\### Redaction using a preserved payload hash
+### Redaction using a preserved payload hash
 
 
 
@@ -160,7 +160,7 @@ The readable payload can be replaced with a redaction marker while retaining the
 
 
 
-\### Filtered export
+### Filtered export
 
 
 
@@ -168,7 +168,7 @@ The export includes hash and canonicalization metadata so a recipient can recalc
 
 
 
-\### Compliance report
+### Compliance report
 
 
 
@@ -176,7 +176,7 @@ The report reuses existing query and chain-verification functionality. Its integ
 
 
 
-\## 8. Production Considerations
+## 8. Production Considerations
 
 
 
