@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
 import java.util.TreeMap;
@@ -12,7 +15,13 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@AutoConfigureMockMvc
 @SpringBootTest
 @Transactional
 class AuditLogServiceApplicationTests {
@@ -25,6 +34,9 @@ class AuditLogServiceApplicationTests {
 
     @Autowired
     private RedactionRecordRepository redactionRecordRepository;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @Test
     void contextLoads() {
@@ -688,6 +700,45 @@ void shouldRejectRedactingAnAlreadyRedactedEvent() {
             "Audit event has already been redacted",
             exception.getMessage()
     );
+}
+
+@Test
+void readerCanViewEventsButCannotCreateThem() throws Exception {
+    mockMvc.perform(get("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-reader",
+                            "test-only-reader-password")))
+            .andExpect(status().isOk());
+
+    mockMvc.perform(post("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-reader",
+                            "test-only-reader-password"))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"))
+            .andExpect(status().isForbidden());
+}
+
+
+@Test
+void adminCanCreateEvent() throws Exception {
+    mockMvc.perform(post("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-admin",
+                            "test-only-admin-password"))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {
+                              "eventType": "ACCOUNT_VIEWED",
+                              "actorId": "security-test-admin",
+                              "resourceType": "ACCOUNT",
+                              "resourceId": "security-test-1",
+                              "payload": {"action": "view"}
+                            }
+                            """))
+            .andExpect(status().isCreated());
 }
 
 
