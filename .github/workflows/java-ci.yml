@@ -25,7 +25,7 @@ jobs:
           cache: maven
 
       - name: Run tests and JaCoCo coverage checks
-        run: ./mvnw --batch-mode --no-transfer-progress clean verify
+        run: bash ./mvnw --batch-mode --no-transfer-progress clean verify
 
       - name: Upload JaCoCo HTML report
         if: always()
@@ -35,3 +35,4 @@ jobs:
           path: target/site/jacoco/
           if-no-files-found: warn
           retention-days: 30
+
