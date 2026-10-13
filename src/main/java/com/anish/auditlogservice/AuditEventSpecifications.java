@@ -4,6 +4,7 @@ package com.anish.auditlogservice;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
+import java.util.Set;
 
 public final class AuditEventSpecifications {
 
@@ -30,6 +31,21 @@ public final class AuditEventSpecifications {
                 resourceId == null ? cb.conjunction()
                         : cb.equal(root.get("resourceId"), resourceId);
     }
+
+    public static Specification<AuditEventEntity> hasResourceIdIn(
+                Set<String> allowedResourceIds) {
+        return (root, query, cb) -> {
+                if (allowedResourceIds == null) {
+                return cb.conjunction(); // Admin: no resource restriction
+                }
+
+                if (allowedResourceIds.isEmpty()) {
+                return cb.disjunction(); // Reader with no assigned resources: no results
+                }
+
+                return root.get("resourceId").in(allowedResourceIds);
+        };
+        }
 
     public static Specification<AuditEventEntity> hasEventType(
             String eventType) {

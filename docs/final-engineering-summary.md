@@ -96,7 +96,7 @@ During development, the application was built and run locally. REST endpoints we
 
 
 
-The latest reported successful automated test run completed 24 tests with no failures or errors. A manual end-to-end check also exercised all 12 API routes against a temporary in-memory database.
+The full automated test suite passed on 13 October 2026 with 31 tests, 0 failures, 0 errors, and 0 skipped tests (`.\mvnw.cmd clean test` in PowerShell). A manual end-to-end check also exercised all 12 API routes against a temporary in-memory database.
 
 
 
@@ -164,7 +164,7 @@ The report verifies the stored chain as a whole. It does not independently deter
 
 
 
-The prototype still needs stronger integrity evidence, persistent identity management, HTTPS for deployed use, production-grade storage controls, backups and recovery testing, dedicated concurrency/load testing, HMAC key versioning and rotation, and operational monitoring.
+The prototype still needs stronger integrity evidence, persistent identity management, HTTPS for deployed use, production-grade storage controls, backups and recovery testing, higher-volume concurrency and load testing, HMAC key versioning and rotation, and operational monitoring. A basic 8-writer concurrency test now checks chain integrity against H2, but it does not replace sustained-load or production-database testing.
 
 
 

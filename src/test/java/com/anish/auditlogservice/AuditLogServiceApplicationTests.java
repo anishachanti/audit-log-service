@@ -2,24 +2,30 @@
 package com.anish.auditlogservice;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.util.Map;
+import java.util.List;
 import java.util.TreeMap;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @AutoConfigureMockMvc
 @SpringBootTest
@@ -37,6 +43,22 @@ class AuditLogServiceApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @BeforeEach
+    void authenticateDirectServiceTestsAsAdmin() {
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(
+                "direct-test-admin",
+                "not-used",
+                List.of(new SimpleGrantedAuthority("ROLE_AUDIT_ADMIN"))
+        ));
+        SecurityContextHolder.setContext(context);
+    }
+
+    @AfterEach
+    void clearTestAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void contextLoads() {
@@ -702,6 +724,18 @@ void shouldRejectRedactingAnAlreadyRedactedEvent() {
     );
 }
 
+    @Test
+    void rejectsMissingAndInvalidCredentials() throws Exception {
+        mockMvc.perform(get("/audit/events"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/audit/events")
+                        .with(httpBasic(
+                                "audit-test-reader",
+                                "wrong-password")))
+                .andExpect(status().isUnauthorized());
+    }
+
 @Test
 void readerCanViewEventsButCannotCreateThem() throws Exception {
     mockMvc.perform(get("/audit/events")
@@ -714,7 +748,6 @@ void readerCanViewEventsButCannotCreateThem() throws Exception {
                     .with(httpBasic(
                             "audit-test-reader",
                             "test-only-reader-password"))
-                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}"))
             .andExpect(status().isForbidden());
@@ -727,7 +760,6 @@ void adminCanCreateEvent() throws Exception {
                     .with(httpBasic(
                             "audit-test-admin",
                             "test-only-admin-password"))
-                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {
@@ -742,5 +774,105 @@ void adminCanCreateEvent() throws Exception {
 }
 
 
+@Test
+void readerCannotQueryUnassignedResource() throws Exception {
+    AuditEventRequest allowedEvent = new AuditEventRequest();
+    allowedEvent.setEventType("ACCOUNT_VIEWED");
+    allowedEvent.setActorId("reader-test-user");
+    allowedEvent.setResourceType("ACCOUNT");
+    allowedEvent.setResourceId("security-test-1");
+    allowedEvent.setPayload(Map.of("action", "view"));
+    auditEventService.createEvent(allowedEvent);
 
+    AuditEventRequest outsideScopeEvent = new AuditEventRequest();
+    outsideScopeEvent.setEventType("ACCOUNT_VIEWED");
+    outsideScopeEvent.setActorId("other-test-user");
+    outsideScopeEvent.setResourceType("ACCOUNT");
+    outsideScopeEvent.setResourceId("security-test-outside");
+    outsideScopeEvent.setPayload(Map.of("action", "view"));
+    auditEventService.createEvent(outsideScopeEvent);
+
+    mockMvc.perform(get("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-reader",
+                            "test-only-reader-password")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].resourceId")
+                    .value("security-test-1"));
+
+    mockMvc.perform(get("/audit/events")
+                    .param("resourceId", "security-test-outside")
+                    .with(httpBasic(
+                            "audit-test-reader",
+                            "test-only-reader-password")))
+            .andExpect(status().isForbidden());
+}
+
+
+
+    @Test
+    void readerCannotExportUnassignedResourceEvents() throws Exception {
+        AuditEventRequest allowedEvent = new AuditEventRequest();
+        allowedEvent.setEventType("ACCOUNT_VIEWED");
+        allowedEvent.setActorId("export-scope-user");
+        allowedEvent.setResourceType("ACCOUNT");
+        allowedEvent.setResourceId("security-test-1");
+        allowedEvent.setPayload(Map.of("action", "view"));
+        auditEventService.createEvent(allowedEvent);
+
+        AuditEventRequest outsideScopeEvent = new AuditEventRequest();
+        outsideScopeEvent.setEventType("ACCOUNT_VIEWED");
+        outsideScopeEvent.setActorId("export-scope-user");
+        outsideScopeEvent.setResourceType("ACCOUNT");
+        outsideScopeEvent.setResourceId("security-test-outside");
+        outsideScopeEvent.setPayload(Map.of("action", "view"));
+        auditEventService.createEvent(outsideScopeEvent);
+
+        mockMvc.perform(get("/audit/events/export")
+                        .param("actorId", "export-scope-user")
+                        .with(httpBasic(
+                                "audit-test-reader",
+                                "test-only-reader-password")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.events.length()").value(1))
+                .andExpect(jsonPath("$.events[0].resourceId")
+                        .value("security-test-1"));
+
+        mockMvc.perform(get("/audit/events/export")
+                        .param("resourceId", "security-test-outside")
+                        .with(httpBasic(
+                                "audit-test-reader",
+                                "test-only-reader-password")))
+                .andExpect(status().isForbidden());
+    }
+    @Test
+    void readerComplianceReportIncludesOnlyAssignedResources() throws Exception {
+        AuditEventRequest allowedEvent = new AuditEventRequest();
+        allowedEvent.setEventType("ACCOUNT_VIEWED");
+        allowedEvent.setActorId("report-scope-user");
+        allowedEvent.setResourceType("ACCOUNT");
+        allowedEvent.setResourceId("security-test-1");
+        allowedEvent.setPayload(Map.of("action", "view"));
+        auditEventService.createEvent(allowedEvent);
+
+        AuditEventRequest outsideScopeEvent = new AuditEventRequest();
+        outsideScopeEvent.setEventType("ACCOUNT_VIEWED");
+        outsideScopeEvent.setActorId("report-scope-user");
+        outsideScopeEvent.setResourceType("ACCOUNT");
+        outsideScopeEvent.setResourceId("security-test-outside");
+        outsideScopeEvent.setPayload(Map.of("action", "view"));
+        auditEventService.createEvent(outsideScopeEvent);
+
+        mockMvc.perform(get("/audit/events/compliance/report")
+                        .param("actorId", "report-scope-user")
+                        .with(httpBasic(
+                                "audit-test-reader",
+                                "test-only-reader-password")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalEvents").value(1))
+                .andExpect(jsonPath("$.events.content[0].resourceId")
+                        .value("security-test-1"))
+                .andExpect(jsonPath("$.events.content.length()").value(1));
+    }
 }

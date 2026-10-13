@@ -13,6 +13,14 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Configuration
 public class SecurityConfig {
@@ -22,6 +30,8 @@ public class SecurityConfig {
             throws Exception {
 
         http
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
                 // Read-only endpoints: readers and admins
                 .requestMatchers(
@@ -62,16 +72,28 @@ public class SecurityConfig {
             @Value("${audit.security.admin.username}") String adminUsername,
             @Value("${audit.security.admin.password}") String adminPassword,
             @Value("${audit.security.reader.username}") String readerUsername,
-            @Value("${audit.security.reader.password}") String readerPassword) {
+            @Value("${audit.security.reader.password}") String readerPassword,
+            @Value("${audit.security.reader.resource-ids}") String readerResourceIds) {
 
         UserDetails admin = User.withUsername(adminUsername)
                 .password(passwordEncoder.encode(adminPassword))
                 .roles("AUDIT_ADMIN")
                 .build();
 
+        List<GrantedAuthority> readerAuthorities = new ArrayList<>();
+        readerAuthorities.add(new SimpleGrantedAuthority("ROLE_AUDIT_READER"));
+
+        for (String resourceId : readerResourceIds.split(",")) {
+             String trimmedResourceId = resourceId.trim();
+
+             if (!trimmedResourceId.isEmpty()) {
+                 readerAuthorities.add(new SimpleGrantedAuthority("RESOURCE_ID:" + trimmedResourceId));
+             }
+        }
+
         UserDetails reader = User.withUsername(readerUsername)
                 .password(passwordEncoder.encode(readerPassword))
-                .roles("AUDIT_READER")
+                .authorities(readerAuthorities)
                 .build();
 
         return new InMemoryUserDetailsManager(admin, reader);

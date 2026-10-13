@@ -151,7 +151,7 @@ On Windows Command Prompt, use `mvnw.cmd` instead of `./mvnw`.
 
 The API uses HTTP Basic authentication. Configure two accounts using environment variables: an administrator (`AUDIT_API_USERNAME` and `AUDIT_API_PASSWORD`) and a read-only user (`AUDIT_READER_USERNAME` and `AUDIT_READER_PASSWORD`). Users are stored in memory and recreated from these settings each time the application starts.
 
-Both roles can query, export, generate compliance reports, and verify the chain. Only administrators can create events, redact payloads, archive events, or run retention archival. Requests without valid credentials are rejected. Use HTTPS when deploying beyond a local development environment because HTTP Basic credentials must be protected in transit. CSRF protection is enabled, so state-changing requests also need a valid CSRF token; the simple write-request example below is illustrative and must be supplied with the authenticated session and token.
+Both roles can query, export, generate compliance reports, and verify the chain. Only administrators can create events, redact payloads, archive events, or run retention archival. Requests without valid credentials are rejected. The API is configured as stateless and disables CSRF because it uses HTTP Basic authentication for API clients. State-changing requests require administrator credentials but do not require a CSRF token. Use HTTPS when deploying beyond a local development environment because HTTP Basic credentials must be protected in transit.
 
 ### Example requests
 
@@ -163,7 +163,7 @@ Query events:
 
 ```bash
 
-curl "http://localhost:8080/audit/events?page=0&size=10"
+curl -u "$AUDIT_READER_USERNAME" "http://localhost:8080/audit/events?page=0&size=10"
 
 ```
 
@@ -175,7 +175,7 @@ Verify the audit chain:
 
 ```bash
 
-curl "http://localhost:8080/audit/verify"
+curl -u "$AUDIT_READER_USERNAME" "http://localhost:8080/audit/verify"
 
 ```
 
@@ -187,7 +187,7 @@ Generate a compliance report:
 
 ```bash
 
-curl "http://localhost:8080/audit/events/compliance/report?from=2026-10-01T00:00:00Z&to=2026-10-12T23:59:59Z&page=0&size=10"
+curl -u "$AUDIT_READER_USERNAME" "http://localhost:8080/audit/events/compliance/report?from=2026-10-01T00:00:00Z&to=2026-10-12T23:59:59Z&page=0&size=10"
 
 ```
 
@@ -199,14 +199,14 @@ Export events for an actor:
 
 ```bash
 
-curl "http://localhost:8080/audit/events/export?actorId=user-101"
+curl -u "$AUDIT_READER_USERNAME" "http://localhost:8080/audit/events/export?actorId=user-101"
 
 ```
 
 Redact selected fields from an existing event (replace `3` with the event's sequence number):
 
 ```bash
-curl -X PATCH http://localhost:8080/audit/events/3/redact \
+curl -u "$AUDIT_API_USERNAME" -X PATCH http://localhost:8080/audit/events/3/redact \
   -H "Content-Type: application/json" \
   -d '{"fields":["accountNumber","email"]}'
 ```
@@ -283,7 +283,11 @@ Run the automated test suite:
 
 
 
-The suite covers core event operations, integrity verification, archival, export, compliance reporting, field-level redaction validation, redaction-proof tampering cases, and role-based API access (reader access and administrator-only event creation). The latest full test run passed with 24 tests.
+To generate the JaCoCo report and enforce the coverage thresholds, run `./mvnw clean verify` (or `.\mvnw.cmd clean verify` in PowerShell). The HTML report is written to `target/site/jacoco/index.html`. The build checks at least 50% overall line coverage, 25% overall branch coverage, and 50% line coverage for `AuditEventService`, `RedactionSignatureService`, and `SecurityConfig`. The 13 October 2026 `clean verify` run passed with 81.7% overall line coverage and 71.2% branch coverage; the three critical classes achieved 88.5%, 80.6%, and 100% line coverage, respectively.
+
+
+
+The suite covers core event operations, integrity verification, archival, export, compliance reporting, field-level redaction validation, redaction-proof tampering cases, role-based API access, and a concurrent append check. The full suite passed on 13 October 2026 with 31 tests, 0 failures, 0 errors, and 0 skipped tests using `.\mvnw.cmd clean test` from PowerShell.
 
 
 
@@ -303,7 +307,7 @@ The suite covers core event operations, integrity verification, archival, export
 
 - The HMAC key must remain stable to verify existing redaction records. Key rotation and key-version tracking are not implemented; anyone who obtains the key can create signatures that verify.
 
-- Event creation uses a database lock on the shared chain head to serialize writers. This addresses concurrent chain-head updates, but dedicated concurrent-load testing has not been completed.
+- A concurrency test starts 8 event writes together and verifies contiguous sequence numbers, hash links, the final chain head, and chain verification in H2. Higher-volume stress and performance testing, including validation against a production database, has not been completed.
 
 - H2 and the current archival implementation are intended for this prototype, not a complete production retention architecture.
 

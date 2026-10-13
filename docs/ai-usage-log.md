@@ -126,7 +126,7 @@ This log summarizes the work performed; representative task descriptions are not
 
 
 
-The latest successful automated test run completed 22 tests with no failures or errors. A manual end-to-end check also exercised all 12 API routes against a temporary in-memory database.
+The full automated test suite passed on 13 October 2026 with 31 tests, 0 failures, 0 errors, and 0 skipped tests. The command was `.\mvnw.cmd clean test` in PowerShell. The suite includes the 8-writer concurrency check in `AuditEventConcurrencyTests`, which verifies contiguous sequence numbers, hash links, the final chain head, and the chain verifier result against H2.
 
 
 
@@ -143,6 +143,16 @@ The latest successful automated test run completed 22 tests with no failures or 
 
 
 **Engineer review:** Documentation was written and saved in the repository, with further consistency checks required before submission.
+
+
+
+### 2.8 Coverage Enforcement
+
+**Task:** Add repeatable line and branch coverage reporting and minimum thresholds to Maven.
+
+**AI assistance:** Helped configure the JaCoCo Maven plugin, report generation, and checks for overall coverage and selected security/integrity classes.
+
+**Validation status:** `clean verify` passed on 13 October 2026. JaCoCo reported 81.7% overall line coverage and 71.2% branch coverage. Line coverage was 88.5% for `AuditEventService`, 80.6% for `RedactionSignatureService`, and 100% for `SecurityConfig`.
 
 
 

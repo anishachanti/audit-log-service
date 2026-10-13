@@ -11,12 +11,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.time.temporal.ChronoUnit;
 
 @Service
@@ -280,22 +286,6 @@ public class AuditEventService {
     }
 
 
-//     public AuditEventEntity redactPayload(Long sequenceNumber) {
-//         AuditEventEntity event = repository.findById(sequenceNumber)
-//                 .orElseThrow(() -> new IllegalArgumentException(
-//                         "Audit event not found: " + sequenceNumber
-//                 ));
-
-//         if (!event.isRedacted()) {
-//                 event.setPayload("[REDACTED]");
-//                 event.setRedacted(true);
-//                 event.setRedactedAt(Instant.now());
-
-//                 return repository.save(event);
-//         }
-//         return event;
-//     }
-
         @Transactional
         public AuditEventEntity redactPayload(
                 Long sequenceNumber,
@@ -385,6 +375,29 @@ public class AuditEventService {
 
 
 
+    private Set<String> getAllowedResourceIdsForCurrentUser() {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AccessDeniedException("Authentication is required");
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(authority ->
+                        "ROLE_AUDIT_ADMIN".equals(authority.getAuthority()));
+
+        if (isAdmin) {
+            return null; // Admin has no resource restriction.
+        }
+
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> authority.startsWith("RESOURCE_ID:"))
+                .map(authority -> authority.substring("RESOURCE_ID:".length()))
+                .collect(Collectors.toSet());
+    }
+
     public Page<AuditEventEntity> queryEvents(
             String actorId,
             String resourceType,
@@ -410,6 +423,14 @@ public class AuditEventService {
                     "'from' must be earlier than or equal to 'to'");
         }
 
+        Set<String> allowedResourceIds = getAllowedResourceIdsForCurrentUser();
+
+        if (allowedResourceIds != null
+                && resourceId != null
+                && !allowedResourceIds.contains(resourceId)) {
+            throw new AccessDeniedException("You cannot access this resource");
+        }
+
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -421,7 +442,8 @@ public class AuditEventService {
                 .and(AuditEventSpecifications.hasResourceId(resourceId))
                 .and(AuditEventSpecifications.hasEventType(eventType))
                 .and(AuditEventSpecifications.timestampFrom(from))
-                .and(AuditEventSpecifications.timestampTo(to));
+                .and(AuditEventSpecifications.timestampTo(to))
+                .and(AuditEventSpecifications.hasResourceIdIn(allowedResourceIds));
 
         return repository.findAll(specification, pageable);
     }
@@ -437,11 +459,20 @@ public class AuditEventService {
             );
         }
 
-        if (hasActorId) {
-                return repository.findAllByActorIdOrderBySequenceNumberAsc(actorId);
+        Set<String> allowedResourceIds = getAllowedResourceIdsForCurrentUser();
+
+        if (allowedResourceIds != null
+                && hasResourceId
+                && !allowedResourceIds.contains(resourceId)) {
+            throw new AccessDeniedException("You cannot access this resource");
         }
 
-        return repository.findAllByResourceIdOrderBySequenceNumberAsc(resourceId);
+        var scope = AuditEventSpecifications.hasResourceIdIn(allowedResourceIds);
+        var specification = hasActorId
+                ? AuditEventSpecifications.hasActorId(actorId).and(scope)
+                : AuditEventSpecifications.hasResourceId(resourceId).and(scope);
+
+        return repository.findAll(specification, Sort.by(Sort.Direction.ASC, "sequenceNumber"));
     }
 
 

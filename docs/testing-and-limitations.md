@@ -26,6 +26,10 @@ Review the Maven output to confirm the result for the current source code.
 
 
 
+Run `./mvnw clean verify` (or `.\mvnw.cmd clean verify` in PowerShell) to create and enforce the JaCoCo report. It is generated at `target/site/jacoco/index.html`. The configured minimums are 50% overall line coverage, 25% overall branch coverage, and 50% line coverage for `AuditEventService`, `RedactionSignatureService`, and `SecurityConfig`. The `clean verify` coverage gate passed on 13 October 2026: overall line coverage was 81.7% and branch coverage was 71.2%. Line coverage was 88.5% for `AuditEventService`, 80.6% for `RedactionSignatureService`, and 100% for `SecurityConfig`. The earlier `clean test` result alone did not execute the coverage check.
+
+
+
 ## 2. Automated Test Coverage
 
 
@@ -66,7 +70,7 @@ The current test suite includes tests for:
 
 
 
-The latest reported full automated test run passed with 24 tests. The suite covers core event operations, integrity verification, retention, export, compliance reporting, redaction validation and tampering, and the tested reader/admin authorization cases.
+The full automated test suite passed on 13 October 2026 with 31 tests, 0 failures, 0 errors, and 0 skipped tests (`.\mvnw.cmd clean test` in PowerShell). This includes a concurrency test that starts 8 event writes together and checks contiguous sequence numbers, hash links, the final chain head, and chain verification.
 
 
 
@@ -168,7 +172,7 @@ The current implementation is an assessment prototype. Before production use, fu
 
 - Review and harden field-level redaction policies, including authorization, nested-field support, and privacy requirements.
 
-- Dedicated concurrency, performance, and load testing. Event creation currently locks a shared chain-head row in a transaction to serialize writers, but the behavior has not been stress-tested.
+- Higher-volume concurrency, performance, and load testing remains outstanding. The current test covers 8 simultaneous writers against H2; it does not establish production-database behavior or performance under sustained load.
 
 - HMAC key versioning and a safe rotation procedure. The configured key must remain available to verify existing redaction records; compromise of the key allows creation of signatures that verify.
 
