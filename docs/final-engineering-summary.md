@@ -1,8 +1,8 @@
-\# Audit Log Service — Final Engineering Summary
+# Audit Log Service — Final Engineering Summary
 
 
 
-\## 1. Objective
+## 1. Objective
 
 
 
@@ -14,7 +14,7 @@ The implementation uses Java, Spring Boot, Spring Data JPA, an H2 file-based dat
 
 
 
-\## 2. Implementation Plan and Rationale
+## 2. Implementation Plan and Rationale
 
 
 
@@ -22,7 +22,7 @@ The work was organized into three scenarios.
 
 
 
-\### Scenario A — Core Audit Log
+### Scenario A — Core Audit Log
 
 
 
@@ -34,7 +34,7 @@ Each event stores its own event hash and a reference to the preceding event's ha
 
 
 
-\### Scenario B — Retention, Redaction, and Export
+### Scenario B — Retention, Redaction, and Export
 
 
 
@@ -46,7 +46,7 @@ The redaction design preserves the original payload hash and event hash when rep
 
 
 
-\### Scenario C — Compliance Reporting
+### Scenario C — Compliance Reporting
 
 
 
@@ -58,7 +58,7 @@ The report supports date-range filtering, optional actor and resource filters, p
 
 
 
-\## 3. Key Artifacts
+## 3. Key Artifacts
 
 
 
@@ -88,7 +88,7 @@ The report supports date-range filtering, optional actor and resource filters, p
 
 
 
-\## 4. Validation
+## 4. Validation
 
 
 
@@ -100,7 +100,7 @@ The latest recorded full test run passed 16 tests with no failures or errors. Re
 
 
 
-\## 5. Assumptions
+## 5. Assumptions
 
 
 
@@ -116,11 +116,11 @@ The latest recorded full test run passed 16 tests with no failures or errors. Re
 
 
 
-\## 6. Risks and Trade-offs
+## 6. Risks and Trade-offs
 
 
 
-\### Hash-chain integrity
+### Hash-chain integrity
 
 
 
@@ -128,7 +128,7 @@ SHA-256 and previous-hash links make many changes detectable, but they do not pr
 
 
 
-\### Redaction
+### Redaction
 
 
 
@@ -136,7 +136,7 @@ Whole-payload redaction preserves the stored payload hash and event hash but rem
 
 
 
-\### Export
+### Export
 
 
 
@@ -144,7 +144,7 @@ A filtered bundle may not include all predecessor events needed to reconstruct t
 
 
 
-\### Retention
+### Retention
 
 
 
@@ -152,7 +152,7 @@ The current implementation marks records as archived. It does not provide a comp
 
 
 
-\### Compliance reporting
+### Compliance reporting
 
 
 
@@ -160,7 +160,7 @@ The report verifies the stored chain as a whole. It does not independently deter
 
 
 
-\### Production readiness
+### Production readiness
 
 
 
@@ -168,7 +168,7 @@ The prototype still needs stronger integrity evidence, production-grade security
 
 
 
-\## 7. AI Assistance and Engineering Ownership
+## 7. AI Assistance and Engineering Ownership
 
 
 
@@ -180,7 +180,7 @@ The engineer remains responsible for the correctness, security, maintainability,
 
 
 
-\## 8. Final Assessment
+## 8. Final Assessment
 
 
 
