@@ -287,7 +287,9 @@ To generate the JaCoCo report and enforce the coverage thresholds, run `./mvnw c
 
 
 
-The suite covers core event operations, integrity verification, archival, export, compliance reporting, field-level redaction validation, redaction-proof tampering cases, role-based API access, and a concurrent append check. The full suite passed on 13 October 2026 with 31 tests, 0 failures, 0 errors, and 0 skipped tests using `.\mvnw.cmd clean test` from PowerShell.
+The suite covers core event operations, integrity verification, archival, export, compliance reporting, field-level redaction validation, redaction-proof tampering cases, role-based API access, and a concurrent append check.
+
+GitHub Actions runs `clean verify` on pushes and pull requests targeting `main`. Each run uploads the generated JaCoCo HTML report as the `jacoco-report-<run number>` artifact for 30 days. Open the workflow run page and use its Artifacts section to download it. A report may be absent if the build fails before JaCoCo creates it. Each run uploads the generated JaCoCo HTML report as the jacoco-report-<run number> artifact for 30 days. Open the workflow run's **Artifacts** section to download it. The report is available only when JaCoCo generated it; a failed or interrupted build may have no report. The full suite passed on 13 October 2026 with 31 tests, 0 failures, 0 errors, and 0 skipped tests using `.\mvnw.cmd clean test` from PowerShell.
 
 
 
@@ -314,3 +316,6 @@ The suite covers core event operations, integrity verification, archival, export
 
 
 See the assessment documentation for design decisions, validation details, trade-offs, and limitations.
+
+
+

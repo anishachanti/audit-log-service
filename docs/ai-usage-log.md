@@ -154,6 +154,8 @@ The full automated test suite passed on 13 October 2026 with 31 tests, 0 failure
 
 **Validation status:** `clean verify` passed on 13 October 2026. JaCoCo reported 81.7% overall line coverage and 71.2% branch coverage. Line coverage was 88.5% for `AuditEventService`, 80.6% for `RedactionSignatureService`, and 100% for `SecurityConfig`.
 
+**CI follow-up:** Added a GitHub Actions workflow to run clean verify on pushes and pull requests to main and upload the JaCoCo HTML report. CI validation remains pending until the workflow runs on GitHub.
+
 
 
 ## 3. How AI Suggestions Were Evaluated
@@ -251,3 +253,5 @@ The engineer is responsible for understanding, reviewing, testing, and defending
 
 
 This log should be updated if additional implementation, testing, or review work is performed before submission.
+
+

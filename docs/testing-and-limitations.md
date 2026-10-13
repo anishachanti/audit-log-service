@@ -28,6 +28,10 @@ Review the Maven output to confirm the result for the current source code.
 
 Run `./mvnw clean verify` (or `.\mvnw.cmd clean verify` in PowerShell) to create and enforce the JaCoCo report. It is generated at `target/site/jacoco/index.html`. The configured minimums are 50% overall line coverage, 25% overall branch coverage, and 50% line coverage for `AuditEventService`, `RedactionSignatureService`, and `SecurityConfig`. The `clean verify` coverage gate passed on 13 October 2026: overall line coverage was 81.7% and branch coverage was 71.2%. Line coverage was 88.5% for `AuditEventService`, 80.6% for `RedactionSignatureService`, and 100% for `SecurityConfig`. The earlier `clean test` result alone did not execute the coverage check.
 
+### CI report
+
+GitHub Actions runs clean verify for pushes and pull requests targeting main, then uploads the generated JaCoCo HTML report directory (target/site/jacoco/) as a downloadable artifact named jacoco-report-<run number> with 30-day retention. Find the artifact on the workflow run page. It may be absent when the build fails before JaCoCo creates the report. The first CI result is pending until this workflow is pushed and runs.
+
 
 
 ## 2. Automated Test Coverage
@@ -191,3 +195,5 @@ AI assistance was used during development, but generated suggestions were review
 
 
 See the AI usage log for a record of assistance, modifications, validation, and accepted or rejected suggestions.
+
+
