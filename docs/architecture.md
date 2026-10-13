@@ -58,12 +58,15 @@ The prototype implements three scenarios:
 
 
 
-### Repository
+### Repository and chain head
+
+Spring Data JPA repositories persist audit events and retrieve them using identifiers, filters, and ordering. A singleton `AuditChainHeadEntity` stores the latest sequence number and hash. Event creation locks that row inside a transaction before assigning the next sequence number and linking the new event, serializing writers as they update the chain head.
 
 
 
-The Spring Data JPA repository persists audit events and retrieves them using identifiers, filters, and ordering.
+### Security
 
+`SecurityConfig` uses HTTP Basic authentication and role checks. The reader and administrator accounts are built at startup from environment-backed properties and stored in an in-memory user store; passwords are encoded through Spring Security's password encoder. Readers can query, export, request compliance reports, and verify. Administrators can also create, redact, archive, and run retention archival. Unmatched routes require administrator access.
 
 
 ### Entity and DTOs
@@ -180,4 +183,4 @@ The report reuses existing query and chain-verification functionality. `from` an
 
 
 
-Potential future improvements include stronger protection of integrity checkpoints using digital signatures, authentication and authorization, production-grade database operations and backups, nested-field redaction, more complete export proofs, and concurrency and performance testing.
+Potential future improvements include stronger protection of integrity checkpoints using digital signatures, persistent identity management or an external identity provider, HTTPS and production security review, production-grade database operations and backups, nested-field redaction, more complete export proofs, HMAC key versioning and rotation, and dedicated concurrency and performance testing. The chain-head lock serializes event creation in the current database, but has not been validated under concurrent load.

@@ -96,14 +96,12 @@ From the repository root, build and test the application:
 
 
 
+Before starting, configure the redaction proof key and the admin/reader credentials described under [Configuration](#configuration). The application will not start if required secrets are missing.
+
 Start the application:
 
-
-
 ```bash
-
 ./mvnw spring-boot:run
-
 ```
 
 
@@ -149,9 +147,15 @@ On Windows Command Prompt, use `mvnw.cmd` instead of `./mvnw`.
 
 
 
+### Authentication and authorization
+
+The API uses HTTP Basic authentication. Configure two accounts using environment variables: an administrator (`AUDIT_API_USERNAME` and `AUDIT_API_PASSWORD`) and a read-only user (`AUDIT_READER_USERNAME` and `AUDIT_READER_PASSWORD`). Users are stored in memory and recreated from these settings each time the application starts.
+
+Both roles can query, export, generate compliance reports, and verify the chain. Only administrators can create events, redact payloads, archive events, or run retention archival. Requests without valid credentials are rejected. Use HTTPS when deploying beyond a local development environment because HTTP Basic credentials must be protected in transit. CSRF protection is enabled, so state-changing requests also need a valid CSRF token; the simple write-request example below is illustrative and must be supplied with the authenticated session and token.
+
 ### Example requests
 
-
+The examples below require the reader or administrator credentials. With curl, add `-u username` to be prompted for the password, for example `curl -u "$AUDIT_READER_USERNAME" ...`.
 
 Query events:
 
@@ -279,7 +283,7 @@ Run the automated test suite:
 
 
 
-The suite covers core event operations, integrity verification, archival, export, compliance reporting, field-level redaction validation, and redaction-proof tampering cases. The latest full test run passed.
+The suite covers core event operations, integrity verification, archival, export, compliance reporting, field-level redaction validation, redaction-proof tampering cases, and role-based API access (reader access and administrator-only event creation). The latest full test run passed with 24 tests.
 
 
 
@@ -294,6 +298,12 @@ The suite covers core event operations, integrity verification, archival, export
 - Filtered exports may not contain the full chain history, and hash metadata alone does not authenticate the exporter.
 
 - The compliance report verifies the stored chain as a whole and does not independently establish whether access was authorized.
+
+- User accounts are held in memory and supplied through environment variables. There is no user lifecycle, external identity provider, or persistent account store. Protect credentials and use HTTPS outside local development.
+
+- The HMAC key must remain stable to verify existing redaction records. Key rotation and key-version tracking are not implemented; anyone who obtains the key can create signatures that verify.
+
+- Event creation uses a database lock on the shared chain head to serialize writers. This addresses concurrent chain-head updates, but dedicated concurrent-load testing has not been completed.
 
 - H2 and the current archival implementation are intended for this prototype, not a complete production retention architecture.
 

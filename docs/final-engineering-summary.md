@@ -92,11 +92,11 @@ The report supports optional `from` and `to` time bounds, optional actor and res
 
 
 
-During development, the application was built and run locally. REST endpoints were exercised with valid requests and selected invalid inputs. Automated tests cover core operations, tampering detection, archival, export, and compliance reporting.
+During development, the application was built and run locally. REST endpoints were exercised with valid requests and selected invalid inputs. Automated tests cover core operations, tampering detection, archival, export, compliance reporting, redaction-proof cases, and the tested reader/admin authorization behavior. Event creation serializes chain-head updates using a database lock inside a transaction. Authentication currently uses environment-configured in-memory accounts.
 
 
 
-The latest successful automated test run completed 22 tests with no failures or errors. A manual end-to-end check also exercised all 12 API routes against a temporary in-memory database.
+The latest reported successful automated test run completed 24 tests with no failures or errors. A manual end-to-end check also exercised all 12 API routes against a temporary in-memory database.
 
 
 
@@ -164,7 +164,7 @@ The report verifies the stored chain as a whole. It does not independently deter
 
 
 
-The prototype still needs stronger integrity evidence, production-grade security and storage controls, backups and recovery testing, concurrency and load testing, and operational monitoring.
+The prototype still needs stronger integrity evidence, persistent identity management, HTTPS for deployed use, production-grade storage controls, backups and recovery testing, dedicated concurrency/load testing, HMAC key versioning and rotation, and operational monitoring.
 
 
 

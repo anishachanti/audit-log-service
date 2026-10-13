@@ -62,9 +62,11 @@ The current test suite includes tests for:
 
 - Verifying signed redaction records and detecting tampered redacted payloads or missing proof records.
 
+- Confirming a reader can access events but cannot create them, and that an administrator can create events.
 
 
-The latest full automated test run passed. The suite covers core event operations, integrity verification, retention, export, compliance reporting, field-level redaction validation, and redaction-proof tampering cases.
+
+The latest reported full automated test run passed with 24 tests. The suite covers core event operations, integrity verification, retention, export, compliance reporting, redaction validation and tampering, and the tested reader/admin authorization cases.
 
 
 
@@ -97,6 +99,8 @@ Manual checks performed during development included:
 - Calling export endpoints with valid and invalid filters.
 
 - Generating a compliance report.
+
+- Confirming an authenticated reader received HTTP 200 when querying events.
 
 - Supplying a reversed date range and confirming that the API returned HTTP 400 with a clear validation message.
 
@@ -154,7 +158,9 @@ The current implementation is an assessment prototype. Before production use, fu
 
 
 
-- Authentication and role-based authorization.
+- Replace the prototype's in-memory accounts with persistent identity management or an external identity provider; define credential provisioning and rotation.
+
+- Require HTTPS outside local development and complete a security review of authentication, authorization, and CSRF behavior.
 
 - Production database configuration, backups, and recovery testing.
 
@@ -162,7 +168,9 @@ The current implementation is an assessment prototype. Before production use, fu
 
 - Review and harden field-level redaction policies, including authorization, nested-field support, and privacy requirements.
 
-- Concurrency, performance, and load testing.
+- Dedicated concurrency, performance, and load testing. Event creation currently locks a shared chain-head row in a transaction to serialize writers, but the behavior has not been stress-tested.
+
+- HMAC key versioning and a safe rotation procedure. The configured key must remain available to verify existing redaction records; compromise of the key allows creation of signatures that verify.
 
 - Security testing and structured operational monitoring.
 
