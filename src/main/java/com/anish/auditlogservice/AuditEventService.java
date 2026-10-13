@@ -377,7 +377,7 @@ public class AuditEventService {
         var events = repository.findAllByOrderBySequenceNumberAsc();
 
         String expectedPreviousHash = GENESIS_HASH;
-        boolean redactedPayloadFound = false;
+        List<Long> redactedSequenceNumbers = new java.util.ArrayList<>();
 
         for (AuditEventEntity event : events) {
                 System.out.println( "Checking sequence: " + event.getSequenceNumber());
@@ -424,8 +424,9 @@ public class AuditEventService {
                             );
                         }
                 } else {
-                         // The original payload is unavailable after redaction.
-                        redactedPayloadFound = true;
+                        // We can verify the stored commitment in the event hash,
+                        // but cannot recalculate it from the removed payload.
+                        redactedSequenceNumbers.add(event.getSequenceNumber());
                 }
 
                 String calculatedHash = calculateStoredEventHash(event);
@@ -444,14 +445,16 @@ public class AuditEventService {
 
         }
 
-        if (redactedPayloadFound) {
+        if (!redactedSequenceNumbers.isEmpty()) {
                 return new AuditVerificationResponse(
                         true,
                         null,
                         null,
                         "Audit chain links and stored event hashes verified successfully."
                         + " One or more redacted payloads could not be independently"
-                        + " verified against their original payload hashes."
+                        + " verified against their original payload hashes.",
+                        "PARTIAL_REDACTED",
+                        redactedSequenceNumbers
                 );
         }
 
@@ -459,7 +462,9 @@ public class AuditEventService {
                 true,
                 null,
                 null,
-                "Audit chain links verified successfully"
+                "Audit chain links verified successfully",
+                "FULL",
+                List.of()
         );
    }
 
