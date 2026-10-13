@@ -1,133 +1,73 @@
 # Audit Log Service — Requirements Analysis
 
-## 1\. Objective
+## 1. Objective
 
-Build an AI-assisted audit log service that maintains an append-only history of system events and detects unauthorized modifications to previously stored records.
+Build an audit log service that records an append-only history of system events and detects unauthorized modifications to stored records.
 
-## 2\. Scenario A — Core Audit Log Service
+## 2. Scenario A — Core Audit Log Service
 
-* Accept and validate audit events.
-* Store event type, actor ID, resource type, resource ID, payload and timestamp.
-* Support event queries using filters and pagination.
-* Maintain a hash chain using each event's content hash and the previous record's hash.
-* Provide a verification endpoint that reports whether the chain is intact.
-* Detect modifications made directly to stored records.
+- Accept and validate audit events containing event type, actor ID, resource type, resource ID, and a structured payload.
+- Assign the event timestamp on the server.
+- Support filtering by actor, resource type, resource ID, event type, and time bounds, with pagination.
+- Maintain a SHA-256 hash chain using each event's hash and the previous event's hash.
+- Provide a verification endpoint that reports whether the chain is intact and identifies the first detected inconsistency.
+- Do not expose general update or delete operations for events.
 
-## 3\. Scenario B — Retention and Redaction
+## 3. Scenario B — Retention and Redaction
 
-* Implement a configurable retention policy.
-* Support structured redaction of sensitive payload fields.
-* Provide bulk export for a specified resource ID or actor ID.
-* Preserve the ability to verify records despite legitimate archival or redaction.
+- Configure a retention period and archive expired events without removing them from the chain.
+- Redact selected top-level fields from an event payload while preserving the original payload hash and event hash.
+- Export events by actor ID or resource ID with hash and canonicalization metadata.
+- Explain verification limits for redacted payloads and filtered exports.
 
-## 4\. Scenario C — Compliance Reporting
+## 4. Scenario C — Compliance Reporting
 
-Clarify the requirement: "Regulators need to be able to audit access to client account data."
+### Original requirement
 
-* Identify ambiguities and questions requiring clarification.
-* Document assumptions.
-* Define the scope of the prototype.
-* Translate the clarified requirement into a technical design and implementation.
+“Regulators need to be able to audit access to client account data.”
 
+### Ambiguities identified
 
+- Which account-related actions count as access?
+- Which actor and resource identifiers must be searchable?
+- Is a date range mandatory, and what pagination behavior is needed?
+- Must reports distinguish successful and failed access, or only list recorded events?
+- What report format, authorization controls, and regulatory rules apply?
 
-## 5\. Engineering Principles
+### Working assumptions
 
-* Do not expose update or delete operations for audit events through the API.
-* Validate input data.
-* Define deterministic serialization for hash calculations.
-* Test normal operations, invalid inputs and tampering scenarios.
-* Review and validate AI-generated code.
-* Document assumptions, risks, trade-offs and limitations.
+- Existing audit events are the source of truth for recorded activity.
+- Actor ID and resource ID can narrow the report.
+- The prototype accepts optional `from` and `to` time bounds and supports pagination.
+- The report includes a total matching-event count and the verification status of the stored chain.
+- The prototype does not infer outcomes or authorization decisions that are absent from events.
 
+### Clarified requirement
 
+Provide a compliance-report endpoint that retrieves recorded audit events, optionally bounded by `from` and `to`, with optional actor and resource filters, pagination, a total matching-event count, and the verification status of the stored audit chain.
 
-#### **## 6. Scenario C — Requirement Clarification**
+### Implemented scope
 
+- Reuse the event-query functionality.
+- Validate that `from` is not later than `to` when both are provided.
+- Return report metadata, applied filters, total match count, a page of events, and whole-chain verification status.
+- Return HTTP 400 for an invalid date range.
 
+### Scope boundaries
 
-\### **Original requirement**
+- The report does not independently determine whether access was authorized.
+- It does not distinguish successful from failed access unless that information is recorded in the event.
+- It does not implement regulator-specific authentication, authorization, or report formats.
+- Chain verification covers the stored chain as a whole, not an independent proof for only the filtered report events.
+- The endpoint currently allows either or both time bounds to be omitted.
 
+## 5. Engineering Principles
 
+- Validate input data and define deterministic serialization for hash calculations.
+- Test normal operations, invalid inputs, and tampering scenarios.
+- Review AI-generated suggestions and document assumptions, risks, and trade-offs.
+- Keep responsibility for correctness, maintainability, and production readiness with the engineer.
 
-"Regulators need to be able to audit access to client account data."
+## 6. Validation Evidence
 
-
-
-\### **Ambiguities identified**
-
-
-
-\- Which account-related actions count as access?
-
-\- Which actor and resource identifiers must be searchable?
-
-\- What reporting period and pagination behavior are required?
-
-\- Does the regulator require evidence of successful and failed access, or only recorded events?
-
-\- What report format, authorization controls, and regulatory rules must be supported?
-
-
-
-\### **Working assumptions**
-
-
-
-\- Existing audit events are the source of truth for recorded activity.
-
-\- Actor ID and resource ID can be used to narrow the report.
-
-\- A report should support a date range and pagination.
-
-\- The report should include the total matching event count and the audit-chain verification result.
-
-\- The prototype should not infer success, failure, or authorization outcomes that are not explicitly recorded.
-
-
-
-\### **Clarified requirement**
-
-
-
-Provide a compliance-report endpoint that retrieves recorded audit events for a requested time range, with optional actor and resource filters, pagination, a total matching event count, and the verification status of the stored audit chain.
-
-
-
-\### **Implemented scope**
-
-
-
-\- Reuse the existing event-query functionality.
-
-\- Validate the requested date range.
-
-\- Return report-generation metadata, filters, total event count, paginated events, and chain-verification status.
-
-\- Return a client error for an invalid date range.
-
-
-
-\### **Scope boundaries**
-
-
-
-\- The report does not independently determine whether access was authorized.
-
-\- It does not distinguish successful from failed access unless that information exists in the recorded events.
-
-\- It does not implement regulator-specific authentication, authorization, or report formats.
-
-\- Chain verification covers the stored chain as a whole, not an independent proof for only the filtered report events.
-
-
-
-\### **Validation evidence**
-
-
-
-The compliance-report tests cover a matching resource report, a report with no matching events, and inclusion of chain-verification status. The application was also manually tested with an invalid date range, which returned HTTP 400.
-
-
-
-The most recent recorded full test run passed 16 tests. Re-run the tests before submission to confirm the current repository state.
+Automated tests cover report results, empty results, chain-status inclusion, and invalid date ranges. The API was also exercised end to end; the compliance-report route returned HTTP 200 with matching events and an intact-chain status.

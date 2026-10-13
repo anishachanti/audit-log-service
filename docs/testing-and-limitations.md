@@ -62,7 +62,7 @@ The current test suite includes tests for:
 
 
 
-<WritingBlock id="58214" variant="standard">The latest full automated test run completed with 21 tests passing, zero failures, and zero errors. The suite covers core event operations, integrity verification, retention, export, compliance reporting, and field-level redaction validation.</WritingBlock>
+The latest successful automated test run completed with 22 tests passing, zero failures, and zero errors. The suite covers core event operations, integrity verification, retention, export, compliance reporting, and field-level redaction validation.
 
 
 
@@ -90,7 +90,7 @@ Manual checks performed during development included:
 
 - Confirmed the original payload hash and event hash were preserved.
 
-- Confirmed /audit/verify returned intact: true after redaction.
+- Confirmed `/audit/verify` returned `intact: true` and `payloadVerificationStatus: PARTIAL_REDACTED` after redaction, with the redacted event sequence number listed.
 
 - Calling export endpoints with valid and invalid filters.
 

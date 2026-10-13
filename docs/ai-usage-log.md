@@ -26,15 +26,15 @@ This log summarizes the work performed; representative task descriptions are not
 
 
 
-\*\*Task:\*\* Understand the assessment and break it into manageable implementation steps.
+**Task:** Understand the assessment and break it into manageable implementation steps.
 
 
 
-\*\*AI assistance:\*\* Helped interpret the three scenarios, explain the acceptance criteria, identify ambiguities, and sequence the implementation work.
+**AI assistance:** Helped interpret the three scenarios, explain the acceptance criteria, identify ambiguities, and sequence the implementation work.
 
 
 
-\*\*Engineer review:\*\* The proposed steps were applied incrementally, with implementation and validation results checked before proceeding.
+**Engineer review:** The proposed steps were applied incrementally, with implementation and validation results checked before proceeding.
 
 
 
@@ -42,15 +42,15 @@ This log summarizes the work performed; representative task descriptions are not
 
 
 
-\*\*Task:\*\* Implement and understand the REST API, event persistence, query filtering, pagination, and hash-chain verification.
+**Task:** Implement and understand the REST API, event persistence, query filtering, pagination, and hash-chain verification.
 
 
 
-\*\*AI assistance:\*\* Provided explanations of Spring Boot components, hashing, canonicalization, and possible implementation approaches.
+**AI assistance:** Provided explanations of Spring Boot components, hashing, canonicalization, and possible implementation approaches.
 
 
 
-\*\*Engineer validation:\*\* The application was built and run locally. API requests and automated tests were used to check implemented behavior.
+**Engineer validation:** The application was built and run locally. API requests and automated tests were used to check implemented behavior.
 
 
 
@@ -58,19 +58,19 @@ This log summarizes the work performed; representative task descriptions are not
 
 
 
-\*\*Task:\*\* Extend the service to archive expired events and redact payloads without changing the stored chain hashes.
+**Task:** Extend the service to archive expired events and redact payloads without changing the stored chain hashes.
 
 
 
-\*\*AI assistance:\*\* Helped reason about preserving the payload hash separately from the readable payload and about the verification implications of redaction.
+**AI assistance:** Helped reason about preserving the payload hash separately from the readable payload and about the verification implications of redaction.
 
 
 
-\*\*Engineer review:\*\* The implementation was exercised through API calls and tests. The resulting design and its limitations were documented.
+**Engineer review:** The implementation was exercised through API calls and tests. The resulting design and its limitations were documented.
 
 
 
-\*\*Design trade-off:\*\* The implemented redaction replaces the entire payload with a redaction marker. This is simpler than field-level redaction but does not meet the more granular privacy behavior that could be required in a production system.
+**Design trade-off:** The implementation replaces selected top-level payload fields with a redaction marker. It preserves the original payload hash and event hash, but the removed field values cannot be rehashed afterward. Nested-field redaction is not supported.
 
 
 
@@ -78,19 +78,19 @@ This log summarizes the work performed; representative task descriptions are not
 
 
 
-\*\*Task:\*\* Export events by actor ID or resource ID with verification metadata.
+**Task:** Export events by actor ID or resource ID with verification metadata.
 
 
 
-\*\*AI assistance:\*\* Helped design the export bundle, reason about deterministic hash inputs, identify validation cases, and formulate tests for exported hashes.
+**AI assistance:** Helped design the export bundle, reason about deterministic hash inputs, identify validation cases, and formulate tests for exported hashes.
 
 
 
-\*\*Engineer validation:\*\* Export requests were exercised with valid and invalid filter combinations, and automated tests were added for metadata and hash integrity.
+**Engineer validation:** Export requests were exercised with valid and invalid filter combinations, and automated tests were added for metadata and hash integrity.
 
 
 
-\*\*Limitation identified:\*\* Filtered exports may omit predecessor events, and hash values alone do not authenticate the exporter.
+**Limitation identified:** Filtered exports may omit predecessor events, and hash values alone do not authenticate the exporter.
 
 
 
@@ -98,15 +98,15 @@ This log summarizes the work performed; representative task descriptions are not
 
 
 
-\*\*Task:\*\* Turn the ambiguous requirement about auditing access to client account data into a concrete report endpoint.
+**Task:** Turn the ambiguous requirement about auditing access to client account data into a concrete report endpoint.
 
 
 
-\*\*AI assistance:\*\* Helped identify ambiguities, formulate assumptions, design the response fields, and document scope boundaries.
+**AI assistance:** Helped identify ambiguities, formulate assumptions, design the response fields, and document scope boundaries.
 
 
 
-\*\*Engineer validation:\*\* The endpoint was manually exercised, including a reversed date range that returned HTTP 400. Automated tests cover matching reports, empty results, and chain-verification status.
+**Engineer validation:** The endpoint was manually exercised, including a reversed date range that returned HTTP 400. Automated tests cover matching reports, empty results, and chain-verification status.
 
 
 
@@ -114,19 +114,19 @@ This log summarizes the work performed; representative task descriptions are not
 
 
 
-\*\*Task:\*\* Resolve implementation and build issues and verify the service incrementally.
+**Task:** Resolve implementation and build issues and verify the service incrementally.
 
 
 
-\*\*AI assistance:\*\* Helped interpret compiler errors, HTTP responses, test results, and configuration details.
+**AI assistance:** Helped interpret compiler errors, HTTP responses, test results, and configuration details.
 
 
 
-\*\*Engineer validation:\*\* Changes were applied locally and checked using Maven builds, automated tests, and API requests.
+**Engineer validation:** Changes were applied locally and checked using Maven builds, automated tests, and API requests.
 
 
 
-The latest recorded full test run passed 16 tests. The final test result must be reconfirmed before submission.
+The latest successful automated test run completed 22 tests with no failures or errors. A manual end-to-end check also exercised all 12 API routes against a temporary in-memory database.
 
 
 
@@ -134,15 +134,15 @@ The latest recorded full test run passed 16 tests. The final test result must be
 
 
 
-\*\*Task:\*\* Prepare requirements, architecture, testing and limitations, AI-use, and final engineering documentation.
+**Task:** Prepare requirements, architecture, testing and limitations, AI-use, and final engineering documentation.
 
 
 
-\*\*AI assistance:\*\* Helped organize technical explanations, identify documentation gaps, and prepare clear descriptions of implementation choices and limitations.
+**AI assistance:** Helped organize technical explanations, identify documentation gaps, and prepare clear descriptions of implementation choices and limitations.
 
 
 
-\*\*Engineer review:\*\* Documentation was written and saved in the repository, with further consistency checks required before submission.
+**Engineer review:** Documentation was written and saved in the repository, with further consistency checks required before submission.
 
 
 
@@ -158,17 +158,17 @@ The review approach included:
 
 
 
-\- Checking suggested changes against the assessment requirements.
+- Checking suggested changes against the assessment requirements.
 
-\- Building the application after relevant code changes.
+- Building the application after relevant code changes.
 
-\- Running automated tests and manually exercising endpoints.
+- Running automated tests and manually exercising endpoints.
 
-\- Reviewing hash-chain and redaction trade-offs.
+- Reviewing hash-chain and redaction trade-offs.
 
-\- Documenting limitations rather than claiming stronger guarantees than the implementation provides.
+- Documenting limitations rather than claiming stronger guarantees than the implementation provides.
 
-\- Keeping implementation decisions and final validation under engineer control.
+- Keeping implementation decisions and final validation under engineer control.
 
 
 
@@ -180,13 +180,13 @@ The review approach included:
 
 
 
-\- Separating controller, service, persistence, and response-model responsibilities.
+- Separating controller, service, persistence, and response-model responsibilities.
 
-\- Using SHA-256 and previous-hash links for tamper-evident records.
+- Using SHA-256 and previous-hash links for tamper-evident records.
 
-\- Reusing existing query functionality for compliance reporting.
+- Reusing existing query functionality for compliance reporting.
 
-\- Including explicit verification metadata and limitations in export bundles.
+- Including explicit verification metadata and limitations in export bundles.
 
 
 
@@ -194,11 +194,11 @@ The review approach included:
 
 
 
-\- Using whole-payload redaction rather than field-level redaction.
+- Using selected top-level field redaction while preserving the event's stored hash values.
 
-\- Using H2 file-based persistence for a locally runnable prototype.
+- Using H2 file-based persistence for a locally runnable prototype.
 
-\- Implementing a basic compliance report instead of a complete regulator-specific reporting platform.
+- Implementing a basic compliance report instead of a complete regulator-specific reporting platform.
 
 
 
@@ -206,13 +206,13 @@ The review approach included:
 
 
 
-\- Digital signatures or independently protected integrity checkpoints.
+- Digital signatures or independently protected integrity checkpoints.
 
-\- A stronger proof mechanism for filtered exports.
+- A stronger proof mechanism for filtered exports.
 
-\- Field-level redaction.
+- Nested-field redaction and more detailed redaction authorization policies.
 
-\- Production authentication, authorization, monitoring, and load testing.
+- Production authentication, authorization, monitoring, and load testing.
 
 
 

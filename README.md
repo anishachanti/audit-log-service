@@ -34,7 +34,7 @@ A Java and Spring Boot REST API for recording audit events, detecting unauthoriz
 
 ### Scenario C — Compliance Reporting
 
-- Generate reports for a requested time range.
+- Generate reports with optional time-range bounds.
 
 - Filter by actor ID or resource ID.
 
@@ -128,6 +128,7 @@ On Windows Command Prompt, use `mvnw.cmd` instead of `./mvnw`.
 
 |---|---|---|
 
+| GET | `/health` | Check service health |
 | POST | `/audit/events` | Create an audit event |
 
 | GET | `/audit/events` | Query events with filters and pagination |
@@ -158,7 +159,7 @@ Query events:
 
 ```bash
 
-curl "http://localhost:8080/audit/events?page=0\&size=10"
+curl "http://localhost:8080/audit/events?page=0&size=10"
 
 ```
 
@@ -182,7 +183,7 @@ Generate a compliance report:
 
 ```bash
 
-curl "http://localhost:8080/audit/events/compliance/report?from=2026-10-01T00:00:00Z\&to=2026-10-12T23:59:59Z\&page=0\&size=10"
+curl "http://localhost:8080/audit/events/compliance/report?from=2026-10-01T00:00:00Z&to=2026-10-12T23:59:59Z&page=0&size=10"
 
 ```
 
@@ -207,7 +208,7 @@ curl -X PATCH http://localhost:8080/audit/events/3/redact \
 ```
 
 
-Use the actual event IDs and request fields appropriate to your data when testing create, archive, and redact operations.
+Use the returned event `sequenceNumber` and payload fields appropriate to your data when testing archive and redact operations.
 
 
 
@@ -235,22 +236,12 @@ Check `src/main/resources/application.properties` for the active database config
 
 
 
-- Documentation
-
-- Requirements analysis
-
-- Architecture
-
-- Testing and limitations
-
-- AI usage log
-
-- Final engineering summary
-
-- Attestation
-
-
-Additional architecture, testing, AI-usage, and engineering-summary documentation will be added as those documents are completed.
+- [Requirements analysis](docs/requirements.md)
+- [Architecture overview](docs/architecture.md)
+- [Testing and limitations](docs/testing-and-limitations.md)
+- [AI usage log](docs/ai-usage-log.md)
+- [Final engineering summary](docs/final-engineering-summary.md)
+- [Attestation](ATTESTATION.md)
 
 
 
@@ -270,7 +261,7 @@ Run the automated test suite:
 
 
 
-Review the test output to confirm the current result. The tests cover core event operations, integrity verification, archival, export, and compliance reporting.
+The current suite covers core event operations, integrity verification, archival, export, compliance reporting, and field-level redaction validation. The latest successful run completed 22 tests with no failures or errors.
 
 
 
@@ -280,7 +271,7 @@ Review the test output to confirm the current result. The tests cover core event
 
 - A hash chain provides tamper evidence but is not tamper-proof if an attacker can modify records and recalculate hashes.
 
-- Redacted payloads cannot be compared with the original payload after the original content is removed.
+- After redaction, the chain and stored payload commitment can be checked, but the removed original payload cannot be rehashed. `/audit/verify` reports `PARTIAL_REDACTED` and lists affected event sequence numbers.
 
 - Filtered exports may not contain the full chain history, and hash metadata alone does not authenticate the exporter.
 

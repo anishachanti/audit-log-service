@@ -42,7 +42,7 @@ Added configurable retention-based archival, payload redaction, and filtered exp
 
 
 
-The redaction design preserves the original payload hash and event hash when replacing the readable payload with a redaction marker. The export bundle includes hash algorithm and canonicalization metadata, along with verification scope and limitations.
+The redaction design replaces selected top-level payload fields with markers while preserving the original payload hash and event hash. The export bundle includes hash algorithm and canonicalization metadata, along with verification scope and limitations.
 
 
 
@@ -54,7 +54,7 @@ Clarified the ambiguous reporting requirement and implemented a report endpoint 
 
 
 
-The report supports date-range filtering, optional actor and resource filters, pagination, total matching event counts, report-generation metadata, and overall chain-verification status.
+The report supports optional `from` and `to` time bounds, optional actor and resource filters, pagination, total matching event counts, report-generation metadata, and overall chain-verification status.
 
 
 
@@ -62,29 +62,29 @@ The report supports date-range filtering, optional actor and resource filters, p
 
 
 
-\- `src/main/java/com/anish/auditlogservice/AuditEventController.java` — REST endpoints.
+- `src/main/java/com/anish/auditlogservice/AuditEventController.java` — REST endpoints.
 
-\- `src/main/java/com/anish/auditlogservice/AuditEventService.java` — core business logic.
+- `src/main/java/com/anish/auditlogservice/AuditEventService.java` — core business logic.
 
-\- `src/main/java/com/anish/auditlogservice/AuditEventEntity.java` — persisted audit event model.
+- `src/main/java/com/anish/auditlogservice/AuditEventEntity.java` — persisted audit event model.
 
-\- `src/main/java/com/anish/auditlogservice/AuditEventSpecifications.java` — dynamic query filters.
+- `src/main/java/com/anish/auditlogservice/AuditEventSpecifications.java` — dynamic query filters.
 
-\- `src/main/java/com/anish/auditlogservice/AuditEventExportBundle.java` — export response model.
+- `src/main/java/com/anish/auditlogservice/AuditEventExportBundle.java` — export response model.
 
-\- `src/main/java/com/anish/auditlogservice/ComplianceReport.java` — compliance report model.
+- `src/main/java/com/anish/auditlogservice/ComplianceReport.java` — compliance report model.
 
-\- `src/test/java/com/anish/auditlogservice/AuditLogServiceApplicationTests.java` — automated tests.
+- `src/test/java/com/anish/auditlogservice/AuditLogServiceApplicationTests.java` — automated tests.
 
-\- `docs/requirements.md` — requirements analysis and Scenario C decisions.
+- `docs/requirements.md` — requirements analysis and Scenario C decisions.
 
-\- `docs/architecture.md` — architecture and design trade-offs.
+- `docs/architecture.md` — architecture and design trade-offs.
 
-\- `docs/testing-and-limitations.md` — validation approach and limitations.
+- `docs/testing-and-limitations.md` — validation approach and limitations.
 
-\- `docs/ai-usage-log.md` — AI assistance and engineering review.
+- `docs/ai-usage-log.md` — AI assistance and engineering review.
 
-\- `ATTESTATION.md` — assessment attestation.
+- `ATTESTATION.md` — assessment attestation.
 
 
 
@@ -96,7 +96,7 @@ During development, the application was built and run locally. REST endpoints we
 
 
 
-The latest recorded full test run passed 16 tests with no failures or errors. Rerun the full test suite before submission and record the final observed result.
+The latest successful automated test run completed 22 tests with no failures or errors. A manual end-to-end check also exercised all 12 API routes against a temporary in-memory database.
 
 
 
@@ -104,15 +104,15 @@ The latest recorded full test run passed 16 tests with no failures or errors. Re
 
 
 
-\- Existing audit events are the source of truth for recorded activity.
+- Existing audit events are the source of truth for recorded activity.
 
-\- Actor ID and resource ID provide useful report filters.
+- Actor ID and resource ID provide useful report filters.
 
-\- Compliance reports should support time-range filtering and pagination.
+- Compliance reports should support time-range filtering and pagination.
 
-\- Integrity status should be included in the report.
+- Integrity status should be included in the report.
 
-\- The prototype should not infer access outcomes or authorization decisions that are not represented in stored event data.
+- The prototype should not infer access outcomes or authorization decisions that are not represented in stored event data.
 
 
 
@@ -132,7 +132,7 @@ SHA-256 and previous-hash links make many changes detectable, but they do not pr
 
 
 
-Whole-payload redaction preserves the stored payload hash and event hash but removes the original content needed to recalculate the original payload hash. Field-level redaction remains a possible improvement.
+Field-level redaction replaces selected top-level payload values while preserving the original payload hash and event hash. After redaction, the verifier can check the chain and stored event hash, but cannot recalculate the original payload hash from the removed value. The response reports `PARTIAL_REDACTED` and lists affected sequence numbers.
 
 
 
@@ -184,7 +184,7 @@ The engineer remains responsible for the correctness, security, maintainability,
 
 
 
-The prototype implements the principal functionality across Scenarios A, B, and C and documents significant design trade-offs. The remaining work is to rerun validation, verify documentation consistency, confirm the repository contains no generated database files or secrets, and ensure the private repository is ready for panel access.
+The prototype implements the principal functionality across Scenarios A, B, and C and documents significant design trade-offs. The remaining work is to address production-readiness gaps, confirm the repository contains no secrets or unintended generated files, and ensure the private repository is ready for panel access.
 
 
 

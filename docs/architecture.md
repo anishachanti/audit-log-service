@@ -70,13 +70,13 @@ The Spring Data JPA repository persists audit events and retrieves them using id
 
 
 
-\- `AuditEventEntity` represents persisted audit events and their integrity and lifecycle metadata.
+- `AuditEventEntity` represents persisted audit events and their integrity and lifecycle metadata.
 
-\- `AuditEventExportBundle` represents exported events and associated verification metadata.
+- `AuditEventExportBundle` represents exported events and associated verification metadata.
 
-\- `ComplianceReport` represents report metadata, matching events, and chain-verification status.
+- `ComplianceReport` represents report metadata, matching events, and chain-verification status.
 
-\- `AuditEventSpecifications` composes optional query filters.
+- `AuditEventSpecifications` composes optional query filters.
 
 
 
@@ -100,7 +100,7 @@ The service uses SHA-256 to calculate payload and event hashes. The event hash i
 
 
 
-During verification, the service checks previous-hash links and recalculates event hashes. For non-redacted events, it also recalculates the payload hash from the stored payload.
+During verification, the service checks previous-hash links and recalculates event hashes. For non-redacted events, it also recalculates the payload hash from the stored payload. For redacted events, it checks the chain and event hash against the preserved payload hash, but cannot recalculate the removed content. The response reports `PARTIAL_REDACTED` and identifies the affected sequence numbers.
 
 
 
@@ -156,7 +156,7 @@ Archival metadata allows records to be marked as archived without physically del
 
 
 
-The readable payload can be replaced with a redaction marker while retaining the original payload hash and event hash. This preserves the chain's stored hash relationships, but the original payload cannot be independently rehashed once removed.
+Selected top-level payload fields are replaced with redaction markers while retaining the original payload hash and event hash. This preserves the chain's stored hash relationships, but the removed values cannot be independently rehashed. Nested fields are not supported.
 
 
 
@@ -172,7 +172,7 @@ The export includes hash and canonicalization metadata so a recipient can recalc
 
 
 
-The report reuses existing query and chain-verification functionality. Its integrity status describes the stored chain as a whole and does not establish whether a recorded access was authorized.
+The report reuses existing query and chain-verification functionality. `from` and `to` are optional time bounds; if both are supplied, the service validates their order. Its integrity status describes the stored chain as a whole and does not establish whether a recorded access was authorized.
 
 
 
@@ -180,4 +180,4 @@ The report reuses existing query and chain-verification functionality. Its integ
 
 
 
-Potential future improvements include stronger protection of integrity checkpoints using digital signatures, authentication and authorization, production-grade database operations and backups, field-level redaction, more complete export proofs, and concurrency and performance testing.
+Potential future improvements include stronger protection of integrity checkpoints using digital signatures, authentication and authorization, production-grade database operations and backups, nested-field redaction, more complete export proofs, and concurrency and performance testing.
