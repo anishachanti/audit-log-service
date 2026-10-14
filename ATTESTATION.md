@@ -22,7 +22,7 @@
 
 **Submission artifact SHA-256:** 154EDCA07195BE97C877592636936F9EDF7739933C08370BA281283943178CEA
 
-**CI verification:** GitHub Actions run 2 completed successfully for the stated commit. It ran Maven `clean verify` and uploaded the JaCoCo report as `jacoco-report-2` (available for 30 days): [GitHub Actions run 2](https://github.com/anishachanti/audit-log-service/actions/runs/38430299704)
+**CI verification:** **CI verification:** GitHub Actions Java CI run #4 completed successfully for release source commit `5ece43dfaa071358923d10ac1f3d7b06183edf6c`. The Tests and coverage job passed, and the workflow uploaded the JaCoCo report as `jacoco-report-4` (272 KB, available for the retention period configured by GitHub Actions). [GitHub Actions run #4](https://github.com/anishachanti/audit-log-service/actions/runs/38540402866) · [JaCoCo report artifact](https://github.com/anishachanti/audit-log-service/actions/runs/38540402866/artifacts/11882280983)
 
 ## Scope, Exclusions, and Third-Party Components
 
