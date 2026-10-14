@@ -729,11 +729,32 @@ void shouldRejectRedactingAnAlreadyRedactedEvent() {
         mockMvc.perform(get("/audit/events"))
                 .andExpect(status().isUnauthorized());
 
+        mockMvc.perform(get("/audit/verify"))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(get("/audit/events")
                         .with(httpBasic(
                                 "audit-test-reader",
                                 "wrong-password")))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void verifyChainRequiresAuthenticationWhenCalledDirectly() {
+        SecurityContextHolder.clearContext();
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> auditEventService.verifyChain());
+    }
+
+    @Test
+    void readerCanVerifyChainThroughTheApi() throws Exception {
+        mockMvc.perform(get("/audit/verify")
+                        .with(httpBasic(
+                                "audit-test-reader",
+                                "test-only-reader-password")))
+                .andExpect(status().isOk());
     }
 
 @Test
@@ -755,6 +776,119 @@ void readerCanViewEventsButCannotCreateThem() throws Exception {
 
 
 @Test
+void retryWithSameIdempotencyKeyReturnsOriginalEvent() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("idempotency-test-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("idempotency-test-account");
+    request.setPayload(Map.of("action", "view"));
+
+    AuditEventEntity first =
+            auditEventService.createEvent(request, "retry-key-1");
+    AuditEventEntity retry =
+            auditEventService.createEvent(request, "retry-key-1");
+
+    assertEquals(first.getId(), retry.getId());
+    assertEquals(first.getSequenceNumber(), retry.getSequenceNumber());
+}
+@Test
+void apiRetryWithSameIdempotencyKeyReturnsOriginalEvent() throws Exception {
+    String requestBody = """
+            {
+              "eventType": "ACCOUNT_VIEWED",
+              "actorId": "http-idempotency-user",
+              "resourceType": "ACCOUNT",
+              "resourceId": "http-idempotency-account",
+              "payload": {"action": "view"}
+            }
+            """;
+
+    String firstResponse = mockMvc.perform(post("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-admin",
+                            "test-only-admin-password"))
+                    .header("Idempotency-Key", "http-retry-key-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    String retryResponse = mockMvc.perform(post("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-admin",
+                            "test-only-admin-password"))
+                    .header("Idempotency-Key", "http-retry-key-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    assertEquals(firstResponse, retryResponse);
+}
+    @Test
+void reusingIdempotencyKeyForDifferentEventThrowsConflict() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("first-user");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("idempotency-test-account");
+    request.setPayload(Map.of("action", "view"));
+
+    auditEventService.createEvent(request, "retry-key-2");
+
+    request.setActorId("different-user");
+
+    assertThrows(
+            IdempotencyConflictException.class,
+            () -> auditEventService.createEvent(request, "retry-key-2")
+    );
+}
+@Test
+void apiRejectsDifferentEventUsingSameIdempotencyKey() throws Exception {
+    String firstRequest = """
+            {
+              "eventType": "ACCOUNT_VIEWED",
+              "actorId": "first-http-user",
+              "resourceType": "ACCOUNT",
+              "resourceId": "http-idempotency-account",
+              "payload": {"action": "view"}
+            }
+            """;
+
+    String differentRequest = """
+            {
+              "eventType": "ACCOUNT_VIEWED",
+              "actorId": "different-http-user",
+              "resourceType": "ACCOUNT",
+              "resourceId": "http-idempotency-account",
+              "payload": {"action": "view"}
+            }
+            """;
+
+    mockMvc.perform(post("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-admin",
+                            "test-only-admin-password"))
+                    .header("Idempotency-Key", "http-conflict-key-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(firstRequest))
+            .andExpect(status().isCreated());
+
+    mockMvc.perform(post("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-admin",
+                            "test-only-admin-password"))
+                    .header("Idempotency-Key", "http-conflict-key-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(differentRequest))
+            .andExpect(status().isConflict());
+}
+    @Test
 void adminCanCreateEvent() throws Exception {
     mockMvc.perform(post("/audit/events")
                     .with(httpBasic(
@@ -775,6 +909,34 @@ void adminCanCreateEvent() throws Exception {
 
 
 @Test
+void rejectsPayloadNestedDeeperThanConfiguredLimit() throws Exception {
+    String nestedPayload = "\"leaf\"";
+
+    // 32 nested objects, plus the request's outer JSON object,
+    // exceeds the configured depth limit of 32.
+    for (int i = 0; i < 32; i++) {
+        nestedPayload = "{\"level\":" + nestedPayload + "}";
+    }
+
+    String requestBody = """
+            {
+              "eventType": "ACCOUNT_VIEWED",
+              "actorId": "depth-test-user",
+              "resourceType": "ACCOUNT",
+              "resourceId": "depth-test-account",
+              "payload": %s
+            }
+            """.formatted(nestedPayload);
+
+    mockMvc.perform(post("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-admin",
+                            "test-only-admin-password"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+            .andExpect(status().isBadRequest());
+}
+    @Test
 void readerCannotQueryUnassignedResource() throws Exception {
     AuditEventRequest allowedEvent = new AuditEventRequest();
     allowedEvent.setEventType("ACCOUNT_VIEWED");
@@ -807,6 +969,86 @@ void readerCannotQueryUnassignedResource() throws Exception {
                             "audit-test-reader",
                             "test-only-reader-password")))
             .andExpect(status().isForbidden());
+}
+
+
+@Test
+void readerCannotCreateEventThroughServiceDirectly() {
+    var context = SecurityContextHolder.createEmptyContext();
+    context.setAuthentication(new UsernamePasswordAuthenticationToken(
+            "direct-test-reader",
+            null,
+            List.of(new SimpleGrantedAuthority("ROLE_AUDIT_READER"))
+    ));
+    SecurityContextHolder.setContext(context);
+
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("direct-test-reader");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("direct-test-account");
+    request.setPayload(Map.of("action", "view"));
+
+    assertThrows(
+            org.springframework.security.access.AccessDeniedException.class,
+            () -> auditEventService.createEvent(request)
+    );
+}
+    @Test
+void readerWithNoAssignedResourcesCannotQueryEvents() {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("reader-scope-test");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId("security-test-1");
+    request.setPayload(Map.of("action", "view"));
+
+    // The test's @BeforeEach sets admin authentication,
+    // so create the event before switching to the reader.
+    auditEventService.createEvent(request);
+
+    var context = SecurityContextHolder.createEmptyContext();
+    context.setAuthentication(new UsernamePasswordAuthenticationToken(
+            "reader-with-no-resources",
+            null,
+            List.of(new SimpleGrantedAuthority("ROLE_AUDIT_READER"))
+    ));
+    SecurityContextHolder.setContext(context);
+
+    var results = auditEventService.queryEvents(
+            null, null, null, null, null, null, 0, 10);
+
+    assertTrue(results.isEmpty());
+}
+
+
+@Test
+void readerCanQueryMultipleAssignedResourcesOnly() throws Exception {
+    createEventForScopeTest("security-test-1");
+    createEventForScopeTest("resource-export-account");
+    createEventForScopeTest("security-test-outside");
+
+    mockMvc.perform(get("/audit/events")
+                    .with(httpBasic(
+                            "audit-test-reader",
+                            "test-only-reader-password")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[0].resourceId")
+                    .value("security-test-1"))
+            .andExpect(jsonPath("$.content[1].resourceId")
+                    .value("resource-export-account"));
+}
+
+private void createEventForScopeTest(String resourceId) {
+    AuditEventRequest request = new AuditEventRequest();
+    request.setEventType("ACCOUNT_VIEWED");
+    request.setActorId("multiple-resource-scope-test");
+    request.setResourceType("ACCOUNT");
+    request.setResourceId(resourceId);
+    request.setPayload(Map.of("action", "view"));
+
+    auditEventService.createEvent(request);
 }
 
 

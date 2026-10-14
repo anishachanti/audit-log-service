@@ -3,6 +3,10 @@ package com.anish.auditlogservice;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,8 +53,19 @@ class AuditEventConcurrencyTests {
                     if (!start.await(10, TimeUnit.SECONDS)) {
                         throw new IllegalStateException("Timed out waiting for the concurrent start signal");
                     }
-                    auditEventService.createEvent(createRequest(writerNumber));
-                    return null;
+                    SecurityContext context = SecurityContextHolder.createEmptyContext();
+                    context.setAuthentication(new UsernamePasswordAuthenticationToken(
+                            "concurrent-test-admin",
+                            null,
+                            List.of(new SimpleGrantedAuthority("ROLE_AUDIT_ADMIN"))));
+                    SecurityContextHolder.setContext(context);
+
+                    try {
+                        auditEventService.createEvent(createRequest(writerNumber));
+                        return null;
+                    } finally {
+                        SecurityContextHolder.clearContext();
+                    }
                 }));
             }
 
@@ -87,8 +102,20 @@ class AuditEventConcurrencyTests {
         assertEquals((long) CONCURRENT_WRITERS, chainHead.getLastSequenceNumber());
         assertEquals(expectedPreviousHash, chainHead.getLastHash());
 
-        AuditVerificationResponse verification = auditEventService.verifyChain();
-        assertTrue(verification.isIntact(), verification.getMessage());
+        SecurityContext verificationContext =
+                SecurityContextHolder.createEmptyContext();
+        verificationContext.setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "concurrent-test-admin",
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_AUDIT_ADMIN"))));
+        SecurityContextHolder.setContext(verificationContext);
+        try {
+            AuditVerificationResponse verification = auditEventService.verifyChain();
+            assertTrue(verification.isIntact(), verification.getMessage());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     private AuditEventRequest createRequest(int writerNumber) {

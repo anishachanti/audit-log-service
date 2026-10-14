@@ -8,6 +8,7 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -22,6 +23,10 @@ public class AuditEventEntity {
 
     @Column(nullable = false, unique = true)
     private UUID id;
+
+    @JsonIgnore
+    @Column(name = "idempotency_key", unique = true, length = 128)
+    private String idempotencyKey;
 
     @Column(nullable = false)
     private String eventType;
@@ -70,6 +75,13 @@ public class AuditEventEntity {
 
     public void setId(UUID id) {
         this.id = id;
+    }
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public String getEventType() {

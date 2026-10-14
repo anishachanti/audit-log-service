@@ -23,9 +23,11 @@ public class AuditEventController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public AuditEventEntity createEvent(
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey,
             @Valid @RequestBody AuditEventRequest request) {
 
-        return auditEventService.createEvent(request);
+        return auditEventService.createEvent(request, idempotencyKey);
     }
 
 

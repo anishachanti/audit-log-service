@@ -15,20 +15,27 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.time.temporal.ChronoUnit;
+import java.nio.charset.StandardCharsets;
+
 
 @Service
 public class AuditEventService {
 
     private static final String GENESIS_HASH = "GENESIS";
+    private static final int MAX_PAYLOAD_BYTES = 64 * 1024;
+    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 128;
 
     private final AuditEventRepository repository;
     private final HashService hashService;
@@ -148,9 +155,11 @@ public class AuditEventService {
                         record.getOriginalPayloadHash(),
                         record.getRedactedPayloadHash(),
                         redactedFields,
-                        record.getRedactedAt());
+                        record.getRedactedAt(),
+                        record.getSigningKeyId());
 
                 return redactionSignatureService.verify(
+                        record.getSigningKeyId(),
                         canonicalRecord,
                         record.getSignature());
 
@@ -181,9 +190,35 @@ public class AuditEventService {
 
     @Transactional
     public AuditEventEntity createEvent(AuditEventRequest request) {
+        return createEvent(request, null);
+    }
+
+    @Transactional
+    public AuditEventEntity createEvent(
+            AuditEventRequest request,
+            String idempotencyKey) {
+        requireAdmin();
+        if (idempotencyKey != null
+                && (idempotencyKey.isBlank()
+                        || idempotencyKey.length() > MAX_IDEMPOTENCY_KEY_LENGTH)) {
+            throw new IllegalArgumentException(
+                    "Idempotency-Key must contain between 1 and 128 characters");
+        }
         UUID id = UUID.randomUUID();
         // Instant timestamp = Instant.now();
         Instant timestamp = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        String payloadJson;
+        try {
+            payloadJson = objectMapper.writeValueAsString(
+                    normalizePayload(request.getPayload()));
+        } catch (JacksonException e) {
+            throw new IllegalStateException("Failed to serialize audit event", e);
+        }
+
+        int payloadBytes = payloadJson.getBytes(StandardCharsets.UTF_8).length;
+        if (payloadBytes > MAX_PAYLOAD_BYTES) {
+            throw new IllegalArgumentException("Payload must not exceed 65536 bytes");
+        }
 
         AuditChainHeadEntity chainHead = chainHeadRepository
         .findByIdForUpdate(AuditChainHeadEntity.SINGLETON_ID)
@@ -194,11 +229,30 @@ public class AuditEventService {
 
 
     try {
-        String payloadJson =
-                objectMapper.writeValueAsString(normalizePayload(request.getPayload()));
 
         // JsonNode canonicalPayload = objectMapper.readTree(payloadJson);
         String payloadHash = calculatePayloadHash(request.getPayload());
+        if (idempotencyKey != null) {
+            var existingOptional = repository.findByIdempotencyKey(idempotencyKey);
+
+            if (existingOptional.isPresent()) {
+                AuditEventEntity existing = existingOptional.get();
+
+                boolean sameRequest =
+                        Objects.equals(existing.getEventType(), request.getEventType())
+                        && Objects.equals(existing.getActorId(), request.getActorId())
+                        && Objects.equals(existing.getResourceType(), request.getResourceType())
+                        && Objects.equals(existing.getResourceId(), request.getResourceId())
+                        && Objects.equals(existing.getPayloadHash(), payloadHash);
+
+                if (sameRequest) {
+                    return existing;
+                }
+
+                throw new IdempotencyConflictException(
+                        "Idempotency-Key was already used for a different event");
+            }
+        }
 
         String hashInput = createHashInput(
                 id,
@@ -216,6 +270,7 @@ public class AuditEventService {
 
         AuditEventEntity event = new AuditEventEntity();
         event.setId(id);
+        event.setIdempotencyKey(idempotencyKey);
         event.setEventType(request.getEventType());
         event.setActorId(request.getActorId());
         event.setResourceType(request.getResourceType());
@@ -244,6 +299,7 @@ public class AuditEventService {
     }
 
     public AuditEventEntity archiveEvent(Long sequenceNumber) {
+        requireAdmin();
         AuditEventEntity event = repository.findById(sequenceNumber)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Audit event not found: " + sequenceNumber
@@ -259,6 +315,7 @@ public class AuditEventService {
 
 
     public int archiveExpiredEvents() {
+        requireAdmin();
         if (retentionDays < 1) {
             throw new IllegalArgumentException(
                     "Retention days must be at least 1"
@@ -290,6 +347,8 @@ public class AuditEventService {
         public AuditEventEntity redactPayload(
                 Long sequenceNumber,
                 List<String> fields) {
+
+                        requireAdmin();
 
         if (fields == null || fields.isEmpty()) {
                 throw new IllegalArgumentException(
@@ -340,12 +399,14 @@ public class AuditEventService {
                 String redactedPayloadHash = calculatePayloadHash(payload);
                 String redactedFieldsJson = objectMapper.writeValueAsString(canonicalFields);
                 
+                String signingKeyId = redactionSignatureService.getSigningKeyId();
                 String canonicalRecord = redactionSignatureService.canonicalize(
                         event.getSequenceNumber(),
                         originalPayloadHash,
                         redactedPayloadHash,
                         canonicalFields,
-                        redactedAt
+                        redactedAt,
+                        signingKeyId
                 );
                 String signature = redactionSignatureService.sign(canonicalRecord);
 
@@ -355,6 +416,7 @@ public class AuditEventService {
                         redactedPayloadHash,
                         redactedFieldsJson,
                         redactedAt,
+                        signingKeyId,
                         signature
                 );
 
@@ -376,12 +438,7 @@ public class AuditEventService {
 
 
     private Set<String> getAllowedResourceIdsForCurrentUser() {
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new AccessDeniedException("Authentication is required");
-        }
+        Authentication authentication = requireReaderOrAdmin();
 
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(authority ->
@@ -396,6 +453,47 @@ public class AuditEventService {
                 .filter(authority -> authority.startsWith("RESOURCE_ID:"))
                 .map(authority -> authority.substring("RESOURCE_ID:".length()))
                 .collect(Collectors.toSet());
+    }
+
+    private Authentication requireReaderOrAdmin() {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            throw new AccessDeniedException("Authentication is required");
+        }
+
+        boolean canRead = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> "ROLE_AUDIT_ADMIN".equals(authority)
+                        || "ROLE_AUDIT_READER".equals(authority));
+
+        if (!canRead) {
+            throw new AccessDeniedException(
+                    "Audit reader or administrator access is required");
+        }
+
+        return authentication;
+    }
+
+
+    private void requireAdmin() {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        boolean isAdmin = authentication != null
+                && authentication.isAuthenticated()
+                && authentication.getAuthorities().stream()
+                        .anyMatch(authority ->
+                                "ROLE_AUDIT_ADMIN".equals(
+                                        authority.getAuthority()));
+
+        if (!isAdmin) {
+                throw new AccessDeniedException(
+                        "Administrator access is required");
+        }
     }
 
     public Page<AuditEventEntity> queryEvents(
@@ -503,6 +601,8 @@ public class AuditEventService {
 
 
     public AuditVerificationResponse verifyChain() {
+        // Also enforce authorization for callers that bypass the HTTP filter chain.
+        requireReaderOrAdmin();
 
         var events = repository.findAllByOrderBySequenceNumberAsc();
 
@@ -581,6 +681,35 @@ public class AuditEventService {
                 expectedPreviousHash = event.getHash();
 
 
+        }
+
+        AuditChainHeadEntity chainHead = chainHeadRepository
+                .findById(AuditChainHeadEntity.SINGLETON_ID)
+                .orElse(null);
+        if (chainHead == null) {
+                return new AuditVerificationResponse(
+                        false,
+                        null,
+                        "CHAIN_HEAD_MISSING",
+                        "Audit chain head record is missing"
+                );
+        }
+
+        long expectedLastSequenceNumber = events.isEmpty()
+                ? 0L
+                : events.get(events.size() - 1).getSequenceNumber();
+        if (!Long.valueOf(expectedLastSequenceNumber).equals(
+                        chainHead.getLastSequenceNumber())
+                || !expectedPreviousHash.equals(chainHead.getLastHash())) {
+                Long lastVerifiedSequenceNumber = events.isEmpty()
+                        ? 0L
+                        : events.get(events.size() - 1).getSequenceNumber();
+                return new AuditVerificationResponse(
+                        false,
+                        lastVerifiedSequenceNumber,
+                        "CHAIN_HEAD_MISMATCH",
+                        "Audit chain head does not match the verified events"
+                );
         }
 
         if (!redactedSequenceNumbers.isEmpty()) {

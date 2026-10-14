@@ -26,6 +26,8 @@ public interface AuditEventRepository
 
     List<AuditEventEntity> findAllByResourceIdOrderBySequenceNumberAsc(
         String resourceId);
+
+    Optional<AuditEventEntity> findByIdempotencyKey(String idempotencyKey);
     
 }
 

@@ -38,6 +38,9 @@ public class RedactionRecordEntity {
     @Column(nullable = false)
     private Instant redactedAt;
 
+    @Column(name = "signing_key_id", length = 64)
+    private String signingKeyId;
+
     // HMAC signature will be added by a separate signing service.
     @Column(nullable = false, length = 64)
     private String signature;
@@ -52,12 +55,14 @@ public class RedactionRecordEntity {
             String redactedPayloadHash,
             String redactedFieldsJson,
             Instant redactedAt,
+            String signingKeyId,
             String signature) {
         this.eventSequenceNumber = eventSequenceNumber;
         this.originalPayloadHash = originalPayloadHash;
         this.redactedPayloadHash = redactedPayloadHash;
         this.redactedFieldsJson = redactedFieldsJson;
         this.redactedAt = redactedAt;
+        this.signingKeyId = signingKeyId;
         this.signature = signature;
     }
 
@@ -83,6 +88,10 @@ public class RedactionRecordEntity {
 
     public Instant getRedactedAt() {
         return redactedAt;
+    }
+
+    public String getSigningKeyId() {
+        return signingKeyId;
     }
 
     public String getSignature() {
