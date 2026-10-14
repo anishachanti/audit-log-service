@@ -16,11 +16,11 @@
 
 **Branch:** main
 
-**Release source commit SHA:** 9147037fdff4c4845177f6ebf9892226a99133ad
+**Release source commit SHA:** 5ece43dfaa071358923d10ac1f3d7b06183edf6c
 
-**Submission artifact filename:** audit-log-service-submission.zip
+**Submission artifact filename:** audit-log-service-5ece43dfaa071358923d10ac1f3d7b06183edf6c.zip
 
-**Submission artifact SHA-256:** B42B045BF9C8BA3F0AA9075D208A3A0720AA2B529AC012670C7C7FB503319A44
+**Submission artifact SHA-256:** 154EDCA07195BE97C877592636936F9EDF7739933C08370BA281283943178CEA
 
 **CI verification:** GitHub Actions run 2 completed successfully for the stated commit. It ran Maven `clean verify` and uploaded the JaCoCo report as `jacoco-report-2` (available for 30 days): [GitHub Actions run 2](https://github.com/anishachanti/audit-log-service/actions/runs/38430299704)
 
